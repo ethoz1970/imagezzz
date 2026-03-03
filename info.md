@@ -10,29 +10,34 @@ This project provides a local, highly-stylized web interface for generating imag
 
 Follow these instructions to spin up the local web environment.
 
-### 1. Requirements
+### 1. Automated Setup (Recommended)
 
-Make sure you have Ollama running in the background and the `llama3.2-vision` model downloaded:
-```bash
-ollama serve
-ollama pull llama3.2-vision
-```
-
-### 2. Python Environment Setup
-You need to create a Python virtual environment and install the required dependencies (PyTorch, Diffusers, Flask, etc.). 
-
-If you just cloned the repository, run these commands in the project folder:
+If you are on an Apple Silicon Mac, you can run the provided setup script which will automatically verify your python version, pull the required Ollama models, create your virtual environment, and install all dependencies:
 
 ```bash
-# Create a virtual environment
-python3 -m venv .venv
-
-# Activate the virtual environment
-source .venv/bin/activate
-
-# Install all required Python packages
-pip install -r requirements.txt
+# Make sure Ollama desktop app is running in the background, then execute:
+chmod +x setup.sh
+./setup.sh
 ```
+
+### 2. Manual Setup
+
+If you prefer to set up the environment manually:
+
+1. Make sure you have Ollama serving the Vision model:
+   ```bash
+   ollama serve
+   ollama pull llama3.2-vision
+   ```
+2. Create and activate a Python virtual environment:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ### 3. Start the Web Server
 The server is built with Flask and handles the API requests from the frontend UI. Start it using the command below. 

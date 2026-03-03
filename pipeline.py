@@ -78,8 +78,10 @@ def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str
                 torch_dtype=dtype
             )
         
-        # Move pipeline to the Metal backend
-        pipe.to(device)
+        # Enable model CPU offloading and VAE optimizations to save system memory
+        pipe.enable_model_cpu_offload(device=device)
+        pipe.vae.enable_slicing()
+        pipe.vae.enable_tiling()
         
         # 3. Generate Image
         if init_image_path:
