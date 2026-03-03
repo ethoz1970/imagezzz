@@ -1,0 +1,8 @@
+torch
+diffusers
+transformers
+accelerate
+requests
+Flask
+flask-cors
+Pillow

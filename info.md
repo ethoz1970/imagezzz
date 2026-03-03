@@ -18,11 +18,20 @@ ollama serve
 ollama pull llama3.2-vision
 ```
 
-### 2. Activate Virtual Environment
-You need to activate your Python environment which contains all the required libraries (Flask, PyTorch, Diffusers).
+### 2. Python Environment Setup
+You need to create a Python virtual environment and install the required dependencies (PyTorch, Diffusers, Flask, etc.). 
+
+If you just cloned the repository, run these commands in the project folder:
 
 ```bash
+# Create a virtual environment
+python3 -m venv .venv
+
+# Activate the virtual environment
 source .venv/bin/activate
+
+# Install all required Python packages
+pip install -r requirements.txt
 ```
 
 ### 3. Start the Web Server
