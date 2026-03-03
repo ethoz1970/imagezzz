@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, Response
 import os
 import base64
+import json
 from pipeline import enhance_prompt_with_ollama, generate_image_with_flux
 from flask_cors import CORS
 import time
@@ -44,6 +45,37 @@ def gallery():
                     'timestamp': metadata.get('timestamp', os.path.getctime(image_path))
                 })
     return render_template("gallery.html", images=images)
+
+@app.route("/api/elaborate_prompt", methods=["POST"])
+def elaborate_prompt():
+    try:
+        # Check if the request is multipart/form-data
+        if not request.content_type.startswith('multipart/form-data'):
+             prompt = request.json.get("prompt") if request.json else None
+             image_file = None
+        else:
+             prompt = request.form.get("prompt")
+             image_file = request.files.get("image")
+
+        if not prompt:
+            return jsonify({"error": "Missing 'prompt' in request body"}), 400
+
+        image_base64 = None
+        
+        # We don't save the image payload to disk here since we don't need it 
+        # beyond elaboration unless the user proceeds to synthesis. Let's just 
+        # convert it in memory if provided.
+        if image_file and image_file.filename != '':
+            image_base64 = base64.b64encode(image_file.read()).decode("utf-8")
+
+        # Step 1: Brain (Expand Prompt)
+        final_prompt = enhance_prompt_with_ollama(prompt, image_base64)
+        
+        return jsonify({"expanded_prompt": final_prompt}), 200
+
+    except Exception as e:
+        print(f"[API] Elaboration Outer Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/generate", methods=["POST"])
 def generate():
@@ -158,9 +190,6 @@ def generate():
             except Exception as e:
                 print(f"[API] Error: {e}")
                 yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
-
-        from flask import Response
-        import json
         
         # Ensure the stream doesn't get buffered by intermediate proxies or Flask
         return Response(generate_stream(), mimetype='text/event-stream', headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-cache'})

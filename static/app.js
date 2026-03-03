@@ -26,7 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const strengthSlider = document.getElementById('strength-slider');
     const strengthVal = document.getElementById('strength-val');
 
+    const promptReviewPanel = document.getElementById('prompt-review-panel');
+    const elaboratedPromptTextarea = document.getElementById('elaborated-prompt');
+    const rerollBtn = document.getElementById('reroll-btn');
+
     let currentImageFile = null;
+    let currentPhase = 'initial'; // 'initial' or 'review'
 
     // Drag & Drop handlers
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -129,6 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
         promptInput.disabled = isLoading;
         skipBrainToggle.disabled = isLoading;
         generateBtn.disabled = isLoading;
+        rerollBtn.disabled = isLoading;
+        elaboratedPromptTextarea.disabled = isLoading;
 
         if (isLoading) {
             btnText.style.opacity = '0';
@@ -196,35 +203,67 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(`Synthesis failed: ${error.message || 'Unknown error'}`);
     };
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    const handleElaborationPhase = async (prompt, skipBrain) => {
+        setFormState(true);
+        btnText.textContent = "Elaborating Prompt...";
 
-        const prompt = promptInput.value.trim();
-        if (!prompt) return;
+        const formData = new FormData();
+        formData.append('prompt', prompt);
 
-        const skipBrain = skipBrainToggle.checked;
+        if (currentImageFile) {
+            formData.append('image', currentImageFile);
+        }
 
         try {
-            // UI Updates
-            setFormState(true);
-            showLoadingPanel(skipBrain);
+            const response = await fetch('/api/elaborate_prompt', {
+                method: 'POST',
+                body: formData
+            });
 
-            // Reset progress bar
-            const progressContainer = document.getElementById('progress-container');
-            const progressBar = document.getElementById('progress-bar');
-            progressContainer.classList.add('hidden');
-            progressBar.style.width = '0%';
-
-            // API Call
-            const formData = new FormData();
-            formData.append('prompt', prompt);
-            formData.append('skip_brain', skipBrain);
-
-            if (currentImageFile) {
-                formData.append('image', currentImageFile);
-                formData.append('strength', strengthSlider.value);
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || 'Server returned an error during elaboration');
             }
 
+            const data = await response.json();
+
+            // Show review panel
+            elaboratedPromptTextarea.value = data.expanded_prompt;
+            promptReviewPanel.classList.remove('hidden');
+
+            // Update buttons
+            btnText.textContent = "Approve & Generate Image";
+            promptInput.parentElement.classList.add('hidden');
+            skipBrainToggle.parentElement.classList.add('hidden');
+            currentPhase = 'review';
+
+        } catch (error) {
+            alert(`Elaboration failed: ${error.message || 'Unknown error'}`);
+        } finally {
+            setFormState(false);
+        }
+    };
+
+    const handleGenerationPhase = async (finalPrompt) => {
+        setFormState(true);
+        btnText.textContent = "Generating...";
+        showLoadingPanel(true); // Always true because brain is done
+
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        progressContainer.classList.add('hidden');
+        progressBar.style.width = '0%';
+
+        const formData = new FormData();
+        formData.append('prompt', finalPrompt);
+        formData.append('skip_brain', true); // Force skip brain for generation
+
+        if (currentImageFile) {
+            formData.append('image', currentImageFile);
+            formData.append('strength', strengthSlider.value);
+        }
+
+        try {
             const response = await fetch('/api/generate', {
                 method: 'POST',
                 body: formData
@@ -235,7 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errText || 'Server returned an error');
             }
 
-            // Stream Processing
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
             let buffer = "";
@@ -246,8 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n\n');
-
-                // Keep the last partial chunk in the buffer
                 buffer = lines.pop();
 
                 for (const line of lines) {
@@ -255,22 +291,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         const dataStr = line.slice(6);
                         try {
                             const data = JSON.parse(dataStr);
-
-                            // Event handling
-                            if (data.status === 'brain_start') {
-                                statusText.textContent = "Brain is analyzing intent and expanding prompt...";
-                            } else if (data.status === 'brain_done') {
-                                // Brain finished, prompt expanded
-                                expandedPromptText.textContent = data.expanded_prompt;
-                            } else if (data.status === 'brush_start') {
+                            if (data.status === 'brush_start') {
                                 statusText.textContent = "Brush is synthesizing image with FLUX...";
                                 statusText.style.animation = "shine 1s linear infinite";
                                 progressContainer.classList.remove('hidden');
                             } else if (data.status === 'brush_progress') {
                                 progressBar.style.width = `${data.progress}%`;
                             } else if (data.status === 'done') {
-                                // Success
-                                displayResult(data.image_url, data.expanded_prompt);
+                                displayResult(data.image_url, finalPrompt);
+                                resetToInitialState();
                             } else if (data.status === 'error') {
                                 throw new Error(data.error);
                             }
@@ -280,12 +309,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-
         } catch (error) {
             handleError(error);
         } finally {
             setFormState(false);
         }
+    };
+
+    const resetToInitialState = () => {
+        currentPhase = 'initial';
+        promptReviewPanel.classList.add('hidden');
+        promptInput.parentElement.classList.remove('hidden');
+        skipBrainToggle.parentElement.classList.remove('hidden');
+        btnText.textContent = "Generate Image";
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (currentPhase === 'initial') {
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+            const skipBrain = skipBrainToggle.checked;
+
+            if (skipBrain) {
+                handleGenerationPhase(prompt);
+            } else {
+                handleElaborationPhase(prompt, false);
+            }
+        } else if (currentPhase === 'review') {
+            const finalPrompt = elaboratedPromptTextarea.value.trim();
+            if (!finalPrompt) return;
+            handleGenerationPhase(finalPrompt);
+        }
+    });
+
+    rerollBtn.addEventListener('click', () => {
+        const prompt = promptInput.value.trim();
+        if (!prompt) return;
+        handleElaborationPhase(prompt, false);
     });
 
     // Auto-resize textarea

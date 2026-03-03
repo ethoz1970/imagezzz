@@ -54,6 +54,17 @@
                         class="custom-slider">
                 </div>
 
+                <div class="input-group hidden" id="prompt-review-panel">
+                    <label for="elaborated-prompt">Review & Edit Prompt</label>
+                    <textarea id="elaborated-prompt" rows="5" class="review-textarea"></textarea>
+                    <div class="review-actions">
+                        <button type="button" id="reroll-btn" class="secondary-btn">
+                            <span class="btn-text">Re-roll Prompt</span>
+                            <span class="btn-loader hidden"></span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="controls-row">
                     <label class="toggle-switch">
                         <input type="checkbox" id="skip-brain">
@@ -61,7 +72,7 @@
                         <span class="toggle-label">Skip Brain (Direct to Model)</span>
                     </label>
                     <button type="submit" id="generate-btn" class="primary-btn">
-                        <span class="btn-text">Generate Image</span>
+                        <span class="btn-text">Generate Prompt</span>
                         <span class="btn-loader hidden"></span>
                     </button>
                 </div>

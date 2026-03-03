@@ -12,6 +12,7 @@ from diffusers import FluxPipeline, FluxImg2ImgPipeline
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 VLM_MODEL = "llama3.2-vision" # We use this as our 'Brain'
 FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell" # We use this as our 'Brush'
+MAX_IMAGE_SIZE = 768 # Limit resolution to save RAM
 
 def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> str:
     """
@@ -96,10 +97,11 @@ def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str
         
         # 3. Generate Image
         if init_image_path:
-            print(f"[Brush] Synthesizing Image-to-Image (strength {strength})...")
+            print(f"[Brush] Synthesizing Image-to-Image (strength {strength}, max {MAX_IMAGE_SIZE}px)...")
             init_image = Image.open(init_image_path).convert("RGB")
             
-            # Optionally resize image to save memory, but we'll try full res first
+            # Resize image to save memory, keeping aspect ratio but capping max dimension
+            init_image.thumbnail((MAX_IMAGE_SIZE, MAX_IMAGE_SIZE), Image.Resampling.LANCZOS)
             image = pipe(
                 prompt=prompt,
                 image=init_image,
@@ -111,9 +113,11 @@ def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str
                 callback_on_step_end=step_callback
             ).images[0]
         else:
-            print(f"[Brush] Synthesizing image (4 steps)...")
+            print(f"[Brush] Synthesizing image (4 steps, {MAX_IMAGE_SIZE}x{MAX_IMAGE_SIZE})...")
             image = pipe(
                 prompt=prompt,
+                height=MAX_IMAGE_SIZE,
+                width=MAX_IMAGE_SIZE,
                 guidance_scale=0.0,
                 num_inference_steps=num_inference_steps,
                 max_sequence_length=256,
