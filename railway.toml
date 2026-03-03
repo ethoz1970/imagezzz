@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["python311"]
+
+[build.nixpacksPlan.phases.install]
+cmds = ["python -m venv /opt/venv", ". /opt/venv/bin/activate", "pip install -r requirements-linux.txt"]
+
+[deploy]
+startCommand = ". /opt/venv/bin/activate && gunicorn --bind 0.0.0.0:$PORT server:app"
+healthcheckPath = "/"
+healthcheckTimeout = 100
