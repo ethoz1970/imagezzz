@@ -25,6 +25,7 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
         "You are an expert prompt engineer for advanced text-to-image diffusion models like FLUX. "
         "Your task is to take a simple user concept and expand it into a highly detailed, visually descriptive prompt. "
         "Include details about lighting, camera angle, focal length, color grading, atmosphere, and artistic style if applicable. "
+        "Keep the description highly concise and under 300 words to avoid exceeding diffusion token limits. "
         "Do not include any introductory or explanatory text. Output ONLY the raw descriptive prompt."
     )
     
@@ -51,11 +52,11 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
         print("[Brain] Falling back to original prompt.")
         return user_intent
 
-def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str = None, strength: float = 0.75):
+def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str = None, strength: float = 0.75, progress_callback: callable = None):
     """
     Acts as the 'Brush' computing node.
     Takes a detailed prompt and synthesizes a high-fidelity image using FLUX.1 [schnell] 
-    on the Apple MPS backend.
+    on the Apple MPS backend. Optionally reports generation progress.
     """
     print("[Brush] Initializing FLUX.1 [schnell] pipeline on MPS...")
     
@@ -79,9 +80,19 @@ def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str
             )
         
         # Enable model CPU offloading and VAE optimizations to save system memory
-        pipe.enable_model_cpu_offload(device=device)
+        pipe.enable_sequential_cpu_offload(device=device)
         pipe.vae.enable_slicing()
         pipe.vae.enable_tiling()
+        
+        num_inference_steps = 4
+        
+        # Internal callback to pipe progress upwards
+        def step_callback(pipe, step_index, timestep, callback_kwargs):
+            if progress_callback:
+                # diffusers pass 0-indexed step, so step_index+1
+                percent = int(((step_index + 1) / num_inference_steps) * 100)
+                progress_callback(percent)
+            return callback_kwargs
         
         # 3. Generate Image
         if init_image_path:
@@ -93,18 +104,21 @@ def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str
                 prompt=prompt,
                 image=init_image,
                 strength=strength,
-                num_inference_steps=4,
+                num_inference_steps=num_inference_steps,
                 guidance_scale=0.0,
-                generator=torch.Generator("cpu").manual_seed(0)
+                max_sequence_length=256,
+                generator=torch.Generator("cpu").manual_seed(0),
+                callback_on_step_end=step_callback
             ).images[0]
         else:
             print(f"[Brush] Synthesizing image (4 steps)...")
             image = pipe(
                 prompt=prompt,
                 guidance_scale=0.0,
-                num_inference_steps=4,
+                num_inference_steps=num_inference_steps,
                 max_sequence_length=256,
-                generator=torch.Generator("cpu").manual_seed(0) 
+                generator=torch.Generator("cpu").manual_seed(0),
+                callback_on_step_end=step_callback
             ).images[0]
         
         # 4. Save Output
@@ -114,6 +128,9 @@ def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str
     except Exception as e:
         print(f"[Brush] Error during image synthesis: {e}")
         print("[Brush] Note: If encountering memory errors, ensure PYTORCH_ENABLE_MPS_FALLBACK=1 is set.")
+    finally:
+        if device == "mps":
+            torch.mps.empty_cache()
 
 def main():
     parser = argparse.ArgumentParser(description="Brain-and-Brush Multimodal Image Synthesis Pipeline")

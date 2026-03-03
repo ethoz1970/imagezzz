@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const promptDetails = document.getElementById('prompt-details');
     const expandedPromptText = document.getElementById('expanded-prompt-text');
+    const generationTimer = document.getElementById('generation-timer');
+    const finalTimeText = document.getElementById('final-time-text');
 
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -106,6 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let loadingInterval;
+    let timerInterval;
+    let startTime;
 
     const updateLoadingText = (skipBrain) => {
         if (skipBrain) {
@@ -147,11 +151,25 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingOverlay.classList.remove('hidden');
         loadingOverlay.style.opacity = '1';
 
+        // Start timer
+        startTime = Date.now();
+        generationTimer.textContent = '0.0s';
+        generationTimer.classList.remove('hidden');
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            generationTimer.textContent = `${elapsed.toFixed(1)}s`;
+        }, 100);
+
         updateLoadingText(skipBrain);
     };
 
     const displayResult = (imageUrl, expandedPrompt) => {
         clearTimeout(loadingInterval);
+        clearInterval(timerInterval);
+        const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+        finalTimeText.textContent = `${totalTime}s`;
+        generationTimer.classList.add('hidden');
 
         // Load image unseen first to avoid flash, then fade in
         generatedImage.onload = () => {
@@ -171,6 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleError = (error) => {
         clearTimeout(loadingInterval);
+        clearInterval(timerInterval);
+        generationTimer.classList.add('hidden');
         loadingOverlay.classList.add('hidden');
         statusText.textContent = "Error generating image.";
         alert(`Synthesis failed: ${error.message || 'Unknown error'}`);
@@ -189,6 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
             setFormState(true);
             showLoadingPanel(skipBrain);
 
+            // Reset progress bar
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            progressContainer.classList.add('hidden');
+            progressBar.style.width = '0%';
+
             // API Call
             const formData = new FormData();
             formData.append('prompt', prompt);
@@ -201,17 +227,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const response = await fetch('/api/generate', {
                 method: 'POST',
-                body: formData // Browser automatically sets Content-Type to multipart/form-data with bounds
+                body: formData
             });
 
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Server returned an error');
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || 'Server returned an error');
             }
 
-            // Success Update
-            displayResult(data.image_url, data.expanded_prompt);
+            // Stream Processing
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+
+                // Keep the last partial chunk in the buffer
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.slice(6);
+                        try {
+                            const data = JSON.parse(dataStr);
+
+                            // Event handling
+                            if (data.status === 'brain_start') {
+                                statusText.textContent = "Brain is analyzing intent and expanding prompt...";
+                            } else if (data.status === 'brain_done') {
+                                // Brain finished, prompt expanded
+                                expandedPromptText.textContent = data.expanded_prompt;
+                            } else if (data.status === 'brush_start') {
+                                statusText.textContent = "Brush is synthesizing image with FLUX...";
+                                statusText.style.animation = "shine 1s linear infinite";
+                                progressContainer.classList.remove('hidden');
+                            } else if (data.status === 'brush_progress') {
+                                progressBar.style.width = `${data.progress}%`;
+                            } else if (data.status === 'done') {
+                                // Success
+                                displayResult(data.image_url, data.expanded_prompt);
+                            } else if (data.status === 'error') {
+                                throw new Error(data.error);
+                            }
+                        } catch (e) {
+                            console.error("Failed to parse stream chunk", e, dataStr);
+                        }
+                    }
+                }
+            }
 
         } catch (error) {
             handleError(error);

@@ -54,3 +54,12 @@ Once the terminal indicates the server is running, open your web browser and nav
 [http://127.0.0.1:5075](http://127.0.0.1:5075)
 
 Type what you'd like to create, and click **Generate Image**! The Brain will expand your prompt, and the Brush will paint it. Depending on your hardware, generation usually takes 15 - 45 seconds.
+
+### 5. Shut Down the Servers
+To shut down the servers, you can return to the terminal windows where they are running and press `Ctrl+C`. 
+
+If you started them in the background and want to stop all related server processes, you can run the following commands:
+```bash
+pkill -f "python.*server.py"
+pkill ollama
+```

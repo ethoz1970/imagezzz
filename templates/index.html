@@ -17,7 +17,11 @@
     <main class="container">
         <header>
             <h1 class="glow-text">Blacksky Labs</h1>
-            <p class="subtitle">Brain & Brush Multimodal Synthesis</p>
+            <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 0.5rem;">
+                <p class="subtitle">Brain Brush Synthesis</p>
+                <a href="/gallery" class="subtitle"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">View Gallery</a>
+            </div>
         </header>
 
         <section class="generator-panel glass-panel">
@@ -70,10 +74,19 @@
                 <div class="image-overlay hidden" id="loading-overlay">
                     <div class="spinner"></div>
                     <p id="loading-text" class="status-text">Brain is analyzing prompt...</p>
+                    <div class="progress-container hidden" id="progress-container">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                    <p id="generation-timer" class="status-text" style="font-size: 0.9rem; margin-top: 0.5rem;">0.0s</p>
                 </div>
             </div>
             <div class="prompt-details hidden" id="prompt-details">
-                <h3>Expanded Prompt</h3>
+                <div
+                    style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.75rem;">
+                    <h3 style="margin-bottom: 0;">Expanded Prompt</h3>
+                    <h3 style="margin-bottom: 0;">Time: <span id="final-time-text"
+                            style="color: var(--accent-glow);">0.0s</span></h3>
+                </div>
                 <p id="expanded-prompt-text"></p>
             </div>
         </section>
