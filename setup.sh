@@ -46,8 +46,18 @@ pip install --upgrade pip
 
 # 5. Install Python dependencies
 echo ""
-echo "=> Installing Python dependencies..."
-pip install -r requirements.txt
+echo "=> Installing Python dependencies for your OS..."
+OS_NAME=$(uname -s)
+if [ "$OS_NAME" = "Darwin" ]; then
+    echo "   Detected Apple Silicon (macOS). Installing requirements-mac.txt..."
+    pip install -r requirements-mac.txt
+elif [ "$OS_NAME" = "Linux" ]; then
+    echo "   Detected Linux. Installing requirements-linux.txt..."
+    pip install -r requirements-linux.txt
+else
+    echo "   Unknown OS. Attempting to install Linux requirements..."
+    pip install -r requirements-linux.txt
+fi
 
 echo ""
 echo "=========================================="
@@ -57,5 +67,9 @@ echo ""
 echo "To run the application, make sure the Ollama app is open in the background, then run:"
 echo ""
 echo "  source .venv/bin/activate"
-echo "  PYTORCH_ENABLE_MPS_FALLBACK=1 python3 server.py"
+if [ "$OS_NAME" = "Darwin" ]; then
+    echo "  PYTORCH_ENABLE_MPS_FALLBACK=1 python3 server.py"
+else
+    echo "  python3 server.py"
+fi
 echo ""

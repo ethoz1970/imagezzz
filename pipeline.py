@@ -5,6 +5,7 @@ import sys
 import os
 import subprocess
 import re
+import platform
 
 # Configuration
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
@@ -26,6 +27,52 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
         "Do not include any introductory or explanatory text. Output ONLY the raw descriptive prompt."
     )
     
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        print(f"\n[Brain] OpenAI API Key Detected. Routing to gpt-4o-mini...")
+        headers = {
+            "Authorization": f"Bearer {openai_key}",
+            "Content-Type": "application/json"
+        }
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_intent}
+        ]
+        
+        if image_base64:
+            # Format base64 for OpenAI Vision
+            messages[1]["content"] = [
+                {"type": "text", "text": user_intent},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_base64}"
+                    }
+                }
+            ]
+            print("[Brain] Reference image included for OpenAI vision expansion.")
+            
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": messages,
+            "max_tokens": 150
+        }
+        
+        try:
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            detailed_prompt = data["choices"][0]["message"]["content"].strip()
+            print(f"[Brain] Generated Expanded Prompt (OpenAI):\n--> {detailed_prompt}\n")
+            return detailed_prompt
+        except Exception as e:
+            print(f"[Brain] Error communicating with OpenAI: {e}")
+            print("[Brain] Falling back to original prompt.")
+            return user_intent
+            
+    # Fallback to local Ollama
+    print(f"\n[Brain] Local Execution. Routing to Ollama ({VLM_MODEL})...")
     payload = {
         "model": VLM_MODEL,
         "system": system_prompt,
@@ -52,61 +99,156 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
 def generate_image_with_flux(prompt: str, output_path: str, size: int = 768, init_image_path: str = None, image_strength: float = 0.4, progress_callback: callable = None):
     """
     Acts as the 'Brush' computing node.
-    Takes a detailed prompt and synthesizes a high-fidelity image using Apple MLX (mflux).
-    Runs via subprocess to ensure memory is released perfectly after generation.
-    Optionally reports generation progress by parsing tqdm output.
-    Supports basic mapping for `--image-path` and `--image-strength` iterative generation mode.
+    Dynamically routes to Apple MLX (mflux) on Mac, or PyTorch (diffusers) on Linux.
     """
-    print(f"[Brush] Initializing FLUX.1 [schnell] via MLX (mflux-generate @ {size}x{size})...")
-    
-    cmd = [
-        "mflux-generate",
-        "--model", "schnell",
-        "--quantize", "4",
-        "--prompt", prompt,
-        "--steps", "4",
-        "--height", str(size),
-        "--width", str(size),
-        "--output", output_path
-    ]
-    
-    if init_image_path:
-        cmd.extend([
-            "--image-path", init_image_path,
-            "--image-strength", str(image_strength)
-        ])
-    
-    try:
-        # Run mflux-generate and capture output to parse progress
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
+    fal_key = os.environ.get("FAL_KEY")
+    if fal_key:
+        print(f"[Brush] Fal.ai Key Detected. Routing to fal-ai/flux/schnell @ {size}x{size}...")
+        headers = {
+            "Authorization": f"Key {fal_key}",
+            "Content-Type": "application/json"
+        }
         
-        # Regex to catch tqdm progress percentage
-        progress_pattern = re.compile(r'(\d{1,3})%\|')
-        
-        for line in process.stdout:
-            # sys.stdout.write(line) # optional: echo to terminal if desired
-            if progress_callback:
-                match = progress_pattern.search(line)
-                if match:
-                    percent = int(match.group(1))
-                    progress_callback(percent)
-                    
-        process.wait()
-        
-        if process.returncode == 0:
-            print(f"[Brush] Success! Image saved to: {output_path}")
-        else:
-            print(f"[Brush] Error during image synthesis. Process exited with code {process.returncode}")
+        # Fal.ai expects specific dimensions or custom
+        image_size = "square_hd"
+        if size == 1024:
+            image_size = "square_hd"
+        elif size == 512:
+            image_size = "square"
             
-    except Exception as e:
-        print(f"[Brush] Error invoking mflux: {e}")
+        payload = {
+            "prompt": prompt,
+            "image_size": image_size,
+            "num_inference_steps": 4,
+            "num_images": 1,
+            "enable_safety_checker": False
+        }
+        
+        # If image to image is supported by fal's schnell, we would add the image URL here.
+        # For now, fal-ai/flux/schnell is primarily T2I.
+        if init_image_path:
+            print("[Brush] WARNING: Image-to-Image requires specific endpoints on Fal.ai. Generating Text-to-Image.")
+            
+        try:
+            if progress_callback:
+                progress_callback(50) # Fake progress for API delay
+                
+            response = requests.post("https://fal.run/fal-ai/flux/schnell", headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            
+            if progress_callback:
+                progress_callback(90)
+                
+            img_url = data.get("images", [])[0].get("url")
+            
+            # Download the resulting image to the local output_path
+            img_data = requests.get(img_url).content
+            with open(output_path, 'wb') as handler:
+                handler.write(img_data)
+                
+            if progress_callback:
+                progress_callback(100)
+                
+            print(f"[Brush] Success! Cloud image downloaded and saved to: {output_path}")
+            return
+            
+        except Exception as e:
+            print(f"[Brush] Error communicating with Fal.ai: {e}")
+            print("[Brush] Falling back to local generation...")
+            # Fall through to local generation below if cloud fails
+
+    if platform.system() == "Darwin":
+        print(f"[Brush] Apple Silicon Detected. Initializing FLUX.1 [schnell] via MLX (mflux-generate @ {size}x{size})...")
+        
+        cmd = [
+            "mflux-generate",
+            "--model", "schnell",
+            "--quantize", "4",
+            "--prompt", prompt,
+            "--steps", "4",
+            "--height", str(size),
+            "--width", str(size),
+            "--output", output_path
+        ]
+        
+        if init_image_path:
+            cmd.extend([
+                "--image-path", init_image_path,
+                "--image-strength", str(image_strength)
+            ])
+        
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            progress_pattern = re.compile(r'(\d{1,3})%\|')
+            
+            for line in process.stdout:
+                if progress_callback:
+                    match = progress_pattern.search(line)
+                    if match:
+                        percent = int(match.group(1))
+                        progress_callback(percent)
+                        
+            process.wait()
+            
+            if process.returncode == 0:
+                print(f"[Brush] Success! Image saved to: {output_path}")
+            else:
+                print(f"[Brush] Error during image synthesis. Process exited with code {process.returncode}")
+                
+        except Exception as e:
+            print(f"[Brush] Error invoking mflux: {e}")
+
+    else:
+        # Linux / Windows fallback using standard Diffusers Pipeline
+        print(f"[Brush] Linux Detected. Initializing FLUX.1 [schnell] via PyTorch/Diffusers @ {size}x{size}...")
+        import torch
+        from diffusers import FluxPipeline
+        
+        try:
+            pipe = FluxPipeline.from_pretrained(
+                "black-forest-labs/FLUX.1-schnell", 
+                torch_dtype=torch.bfloat16
+            )
+            pipe.enable_model_cpu_offload() # Safest memory fallback for cloud instances by default
+            
+            def progress_fn(pipeline, step_index, timestep, callback_kwargs):
+                if progress_callback:
+                    percent = int((step_index / 4) * 100)
+                    progress_callback(percent)
+                return callback_kwargs
+
+            if init_image_path:
+                print("[Brush] WARNING: Image-to-Image requires specific Img2Img pipelines in Diffusers. Generating Text-to-Image for this node.")
+
+            image = pipe(
+                prompt,
+                guidance_scale=0.0,
+                num_inference_steps=4,
+                max_sequence_length=256,
+                height=size,
+                width=size,
+                callback_on_step_end=progress_fn
+            ).images[0]
+            
+            image.save(output_path)
+            print(f"[Brush] Success! Image saved to: {output_path}")
+            
+            # Explicitly free memory if moving back and forth
+            del pipe
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        except Exception as e:
+            print(f"[Brush] Error invoking Diffusers: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Brain-and-Brush Multimodal Image Synthesis Pipeline")

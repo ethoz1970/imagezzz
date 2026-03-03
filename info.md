@@ -61,3 +61,32 @@ If you started them in the background and want to stop all related server proces
 pkill -f "python.*server.py"
 pkill ollama
 ```
+
+## Hosting Online
+
+Because this application relies on a **15+ GB Vision LLM** and a **12+ GB Image Diffusion Model**, hosting it online requires significant GPU resources. Furthermore, we specifically architected this app to use Apple's `mlx` framework so it runs optimally on your Mac's Unified Memory. 
+
+If you want to access this web UI from anywhere in the world, you have three main options:
+
+### Option 1: Expose your Mac to the Internet (Free, Easiest)
+The absolute easiest way to "host" this online is to keep it running on your Mac at home, and use a secure tunnel to expose the `localhost:5075` port to the public internet.
+
+1. Install [ngrok](https://ngrok.com/) or use Cloudflare Tunnels (`cloudflared`).
+2. Run `ngrok http 5075`.
+3. Ngrok will give you a public URL (e.g., `https://1a2b-3c4d.ngrok-free.app`). 
+4. You can open that URL on your phone or any computer in the world, and it will securely route the traffic back to your Mac to generate the images.
+
+*Note: Your Mac must stay awake and connected to the internet for this to work.*
+
+### Option 2: Cloud GPU Hosting (Scalable, Intermediate)
+You could rent a Virtual Machine in the cloud from AWS, GCP, or a boutique GPU host like RunPod to host the backend generation servers.
+* **Apple Silicon (This branch):** If you want to deploy *this exact codebase* using `mflux`, you can rent an **Apple Silicon Mac instance** from AWS (EC2 Mac instances) or Scaleway. This is very expensive (often $0.50 - $1.00+ per hour, 24/7).
+* **NVIDIA/Linux GPUs (Alternative branch):** You can rent standard Linux NVIDIA GPUs (like RTX 4090s or A100s, which are widely available and much cheaper) if you check out the *original* branch of this project before we migrated to `mflux`. The original branch uses standard `PyTorch` and `Diffusers` which are natively designed to run on Linux machines.
+
+### Option 3: Use Cloud APIs (Scalable, Modern)
+If you want to host this robustly for many users, the standard industry practice is to *not* host the AI models yourself. 
+1. Host the Flask Web Server (the UI and `server.py`) on a cheap $5/mo server (like DigitalOcean, Vercel, or Heroku).
+2. Modify `pipeline.py` to make API calls to external providers instead of running local python scripts.
+   * Send text to **OpenAI** or **Anthropic** for the "Brain" elaboration.
+   * Send the elaborated text to **Replicate** or **Fal.ai** (they have incredibly fast FLUX.1 endpoints) for the image generation.
+3. You pay pennies per generation rather than hundreds of dollars a month for a 24/7 GPU server.
