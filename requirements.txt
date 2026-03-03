@@ -1,7 +1,5 @@
-torch
-diffusers
-transformers
-accelerate
+mlx
+mflux
 requests
 Flask
 flask-cors

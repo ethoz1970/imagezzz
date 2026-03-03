@@ -1,17 +1,14 @@
 import requests
 import json
-import torch
 import argparse
 import sys
 import os
-import base64
-from PIL import Image
-from diffusers import FluxPipeline, FluxImg2ImgPipeline
+import subprocess
+import re
 
 # Configuration
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 VLM_MODEL = "llama3.2-vision" # We use this as our 'Brain'
-FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell" # We use this as our 'Brush'
 MAX_IMAGE_SIZE = 768 # Limit resolution to save RAM
 
 def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> str:
@@ -53,88 +50,57 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
         print("[Brain] Falling back to original prompt.")
         return user_intent
 
-def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str = None, strength: float = 0.75, progress_callback: callable = None):
+def generate_image_with_flux(prompt: str, output_path: str, progress_callback: callable = None):
     """
     Acts as the 'Brush' computing node.
-    Takes a detailed prompt and synthesizes a high-fidelity image using FLUX.1 [schnell] 
-    on the Apple MPS backend. Optionally reports generation progress.
+    Takes a detailed prompt and synthesizes a high-fidelity image using Apple MLX (mflux).
+    Runs via subprocess to ensure memory is released perfectly after generation.
+    Optionally reports generation progress by parsing tqdm output.
     """
-    print("[Brush] Initializing FLUX.1 [schnell] pipeline on MPS...")
+    print(f"[Brush] Initializing FLUX.1 [schnell] via MLX (mflux-generate @ {MAX_IMAGE_SIZE}x{MAX_IMAGE_SIZE})...")
     
-    # 1. Device and dtype Selection for Apple Silicon (M4)
-    # MPS (Metal Performance Shaders) is required for hardware acceleration on Mac.
-    # bfloat16 helps keep the large FLUX model within the 24GB Unified Memory limit.
-    device = "mps"
-    dtype = torch.bfloat16
+    cmd = [
+        "mflux-generate",
+        "--model", "schnell",
+        "--quantize", "4",
+        "--prompt", prompt,
+        "--steps", "4",
+        "--height", str(MAX_IMAGE_SIZE),
+        "--width", str(MAX_IMAGE_SIZE),
+        "--output", output_path
+    ]
     
     try:
-        # 2. Load the Pipeline
-        if init_image_path:
-            pipe = FluxImg2ImgPipeline.from_pretrained(
-                FLUX_MODEL_ID,
-                torch_dtype=dtype
-            )
-        else:
-            pipe = FluxPipeline.from_pretrained(
-                FLUX_MODEL_ID,
-                torch_dtype=dtype
-            )
+        # Run mflux-generate and capture output to parse progress
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
         
-        # Enable model CPU offloading and VAE optimizations to save system memory
-        pipe.enable_sequential_cpu_offload(device=device)
-        pipe.vae.enable_slicing()
-        pipe.vae.enable_tiling()
+        # Regex to catch tqdm progress percentage
+        progress_pattern = re.compile(r'(\d{1,3})%\|')
         
-        num_inference_steps = 4
-        
-        # Internal callback to pipe progress upwards
-        def step_callback(pipe, step_index, timestep, callback_kwargs):
+        for line in process.stdout:
+            # sys.stdout.write(line) # optional: echo to terminal if desired
             if progress_callback:
-                # diffusers pass 0-indexed step, so step_index+1
-                percent = int(((step_index + 1) / num_inference_steps) * 100)
-                progress_callback(percent)
-            return callback_kwargs
+                match = progress_pattern.search(line)
+                if match:
+                    percent = int(match.group(1))
+                    progress_callback(percent)
+                    
+        process.wait()
         
-        # 3. Generate Image
-        if init_image_path:
-            print(f"[Brush] Synthesizing Image-to-Image (strength {strength}, max {MAX_IMAGE_SIZE}px)...")
-            init_image = Image.open(init_image_path).convert("RGB")
-            
-            # Resize image to save memory, keeping aspect ratio but capping max dimension
-            init_image.thumbnail((MAX_IMAGE_SIZE, MAX_IMAGE_SIZE), Image.Resampling.LANCZOS)
-            image = pipe(
-                prompt=prompt,
-                image=init_image,
-                strength=strength,
-                num_inference_steps=num_inference_steps,
-                guidance_scale=0.0,
-                max_sequence_length=256,
-                generator=torch.Generator("cpu").manual_seed(0),
-                callback_on_step_end=step_callback
-            ).images[0]
+        if process.returncode == 0:
+            print(f"[Brush] Success! Image saved to: {output_path}")
         else:
-            print(f"[Brush] Synthesizing image (4 steps, {MAX_IMAGE_SIZE}x{MAX_IMAGE_SIZE})...")
-            image = pipe(
-                prompt=prompt,
-                height=MAX_IMAGE_SIZE,
-                width=MAX_IMAGE_SIZE,
-                guidance_scale=0.0,
-                num_inference_steps=num_inference_steps,
-                max_sequence_length=256,
-                generator=torch.Generator("cpu").manual_seed(0),
-                callback_on_step_end=step_callback
-            ).images[0]
-        
-        # 4. Save Output
-        image.save(output_path)
-        print(f"[Brush] Success! Image saved to: {output_path}")
-        
+            print(f"[Brush] Error during image synthesis. Process exited with code {process.returncode}")
+            
     except Exception as e:
-        print(f"[Brush] Error during image synthesis: {e}")
-        print("[Brush] Note: If encountering memory errors, ensure PYTORCH_ENABLE_MPS_FALLBACK=1 is set.")
-    finally:
-        if device == "mps":
-            torch.mps.empty_cache()
+        print(f"[Brush] Error invoking mflux: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Brain-and-Brush Multimodal Image Synthesis Pipeline")
@@ -144,10 +110,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Check if PYTORCH_ENABLE_MPS_FALLBACK is set, warn if not
-    if not os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"):
-        print("Warning: PYTORCH_ENABLE_MPS_FALLBACK is not set. Some PyTorch ops for FLUX might crash on MPS.")
-        print("Consider running with: PYTORCH_ENABLE_MPS_FALLBACK=1 python pipeline.py ...\n")
+    # Run script
     
     # Step 1: Brain (Expand Prompt)
     if args.skip_brain:

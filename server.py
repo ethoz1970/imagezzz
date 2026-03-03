@@ -49,27 +49,14 @@ def gallery():
 @app.route("/api/elaborate_prompt", methods=["POST"])
 def elaborate_prompt():
     try:
-        # Check if the request is multipart/form-data
-        if not request.content_type.startswith('multipart/form-data'):
-             prompt = request.json.get("prompt") if request.json else None
-             image_file = None
-        else:
-             prompt = request.form.get("prompt")
-             image_file = request.files.get("image")
+        data = request.get_json() or {}
+        prompt = data.get("prompt")
 
         if not prompt:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
-        image_base64 = None
-        
-        # We don't save the image payload to disk here since we don't need it 
-        # beyond elaboration unless the user proceeds to synthesis. Let's just 
-        # convert it in memory if provided.
-        if image_file and image_file.filename != '':
-            image_base64 = base64.b64encode(image_file.read()).decode("utf-8")
-
         # Step 1: Brain (Expand Prompt)
-        final_prompt = enhance_prompt_with_ollama(prompt, image_base64)
+        final_prompt = enhance_prompt_with_ollama(prompt, None)
         
         return jsonify({"expanded_prompt": final_prompt}), 200
 
@@ -80,35 +67,12 @@ def elaborate_prompt():
 @app.route("/api/generate", methods=["POST"])
 def generate():
     try:
-        # Check if the request is multipart/form-data
-        if not request.content_type.startswith('multipart/form-data'):
-             # fallback to old behavior if JSON is still sent randomly
-             prompt = request.json.get("prompt") if request.json else None
-             skip_brain = request.json.get("skip_brain", False) if request.json else False
-             strength = 0.75
-             image_file = None
-        else:
-             prompt = request.form.get("prompt")
-             skip_brain_str = request.form.get("skip_brain", "false").lower()
-             skip_brain = skip_brain_str == "true" or skip_brain_str == "on"
-             strength_str = request.form.get("strength")
-             strength = float(strength_str) if strength_str else 0.75
-             image_file = request.files.get("image")
+        data = request.get_json() or {}
+        prompt = data.get("prompt")
+        skip_brain = data.get("skip_brain", False)
 
         if not prompt:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
-
-        init_image_path = None
-        image_base64 = None
-        
-        # Save uploaded image and prepare for processing
-        if image_file and image_file.filename != '':
-            timestamp = int(time.time())
-            init_image_path = os.path.join(UPLOAD_DIR, f"upload_{timestamp}_{image_file.filename}")
-            image_file.save(init_image_path)
-            
-            with open(init_image_path, "rb") as image_f:
-                image_base64 = base64.b64encode(image_f.read()).decode("utf-8")
 
         def generate_stream():
             try:
@@ -122,7 +86,7 @@ def generate():
                     yield f"data: {json.dumps({'status': 'brain_done', 'expanded_prompt': final_prompt})}\n\n"
                 else:
                     yield f"data: {json.dumps({'status': 'brain_start'})}\n\n"
-                    final_prompt = enhance_prompt_with_ollama(prompt, image_base64)
+                    final_prompt = enhance_prompt_with_ollama(prompt, None)
                     yield f"data: {json.dumps({'status': 'brain_done', 'expanded_prompt': final_prompt})}\n\n"
 
                 # Step 2: Brush (Generate Image)
@@ -149,7 +113,7 @@ def generate():
                     
                 def run_generation():
                     try:
-                        generate_image_with_flux(final_prompt, output_path, init_image_path, strength, thread_progress_callback)
+                        generate_image_with_flux(final_prompt, output_path, thread_progress_callback)
                         end_time = time.time()
                         generation_time = end_time - start_time
                         
@@ -179,13 +143,6 @@ def generate():
                         break
 
                 thread.join()
-                
-                # Cleanup uploaded image
-                if init_image_path and os.path.exists(init_image_path):
-                    try:
-                        os.remove(init_image_path)
-                    except Exception as e:
-                        print(f"[API] Cleanup error: {e}")
 
             except Exception as e:
                 print(f"[API] Error: {e}")

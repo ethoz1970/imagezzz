@@ -42,10 +42,8 @@ If you prefer to set up the environment manually:
 ### 3. Start the Web Server
 The server is built with Flask and handles the API requests from the frontend UI. Start it using the command below. 
 
-*Note: We include `PYTORCH_ENABLE_MPS_FALLBACK=1` to ensure PyTorch can safely fall back to CPU operations if it encounters memory limitations on the Apple Silicon GPU during the memory-intensive FLUX generation process.*
-
 ```bash
-PYTORCH_ENABLE_MPS_FALLBACK=1 python3 server.py
+python3 server.py
 ```
 
 ### 4. Access the UI
