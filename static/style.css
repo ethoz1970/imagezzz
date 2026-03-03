@@ -278,6 +278,51 @@ textarea::placeholder {
     transform: scale(1.2);
 }
 
+/* Radio Group */
+.radio-group {
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+}
+
+.radio-option {
+    flex: 1;
+    position: relative;
+    cursor: pointer;
+}
+
+.radio-option input[type="radio"] {
+    display: none;
+}
+
+.radio-label {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: var(--transition-smooth);
+    background: transparent;
+    text-align: center;
+}
+
+.radio-option input[type="radio"]:checked+.radio-label {
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.2);
+    border: 1px solid var(--accent-glow);
+}
+
+.radio-option:hover .radio-label {
+    color: var(--text-primary);
+}
+
 /* Controls Row */
 .controls-row {
     display: flex;
@@ -372,6 +417,80 @@ input:checked~.toggle-label {
     opacity: 0.7;
     cursor: not-allowed;
     transform: none;
+}
+
+/* Secondary Button */
+.secondary-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    padding: 0.8rem 2rem;
+    font-size: 1.05rem;
+    font-weight: 500;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: var(--transition-smooth);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 150px;
+}
+
+.secondary-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.secondary-btn:active {
+    transform: translateY(1px);
+}
+
+.secondary-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Action Icon Button (like Download) */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: var(--accent-glow);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn:active {
+    transform: translateY(1px);
+}
+
+.action-btn.selected-reference {
+    background: rgba(168, 85, 247, 0.4);
+    /* accentuate with purple */
+    border-color: var(--accent-glow);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(125, 211, 252, 0.5);
+}
+
+.action-btn.selected-reference svg {
+    color: var(--accent-glow);
 }
 
 /* Loading State */
@@ -524,6 +643,7 @@ input:checked~.toggle-label {
 .fade-in {
     animation: fadeIn 0.5s ease forwards;
 }
+
 /* Progress Bar */
 .progress-container {
     width: 80%;

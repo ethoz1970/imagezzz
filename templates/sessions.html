@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symphony - Sessions</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        .session-card {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .session-header:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .session-title-area {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .session-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+            cursor: text;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid transparent;
+        }
+
+        .session-title:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .session-title:focus {
+            outline: none;
+            border-color: var(--accent-glow);
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .session-meta {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .session-body {
+            padding: 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1rem;
+            display: none;
+            /* hidden by default, toggled via JS */
+        }
+
+        .session-body.open {
+            display: grid;
+        }
+
+        .session-image-thumb {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .action-icon-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.4rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-icon-btn:hover {
+            color: var(--accent-glow);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .action-icon-btn.delete:hover {
+            color: #ff4d4d;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="background-blob blob-1"></div>
+    <div class="background-blob blob-2"></div>
+
+    <main class="container" style="max-width: 1000px;">
+        <header>
+            <h1 class="glow-text" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+                Blacksky Labs
+                <span
+                    style="font-size: 0.45em; font-weight: 400; color: var(--text-secondary); letter-spacing: 1px; margin-top: 0.3rem;">|
+                    Sessions</span>
+            </h1>
+            <div
+                style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <a href="/" class="subtitle"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Generate</a>
+                <a href="/sessions" class="subtitle"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Sessions</a>
+                <a href="/gallery" class="subtitle"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Gallery</a>
+            </div>
+        </header>
+
+        <section class="glass-panel" style="padding: 2rem;">
+            <div id="sessions-container">
+                <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading sessions...</div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchSessions();
+        });
+
+        async function fetchSessions() {
+            const container = document.getElementById('sessions-container');
+            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading sessions...</div>';
+
+            try {
+                const response = await fetch('/api/sessions');
+                const data = await response.json();
+                renderSessions(data.sessions);
+            } catch (error) {
+                container.innerHTML = `<div style="text-align: center; color: #ff4d4d; padding: 2rem;">Error loading sessions: ${error.message}</div>`;
+            }
+        }
+
+        function renderSessions(sessions) {
+            const container = document.getElementById('sessions-container');
+            container.innerHTML = '';
+
+            if (!sessions || sessions.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <p>No active sessions found.</p>
+                        <a href="/" style="color: var(--accent-glow); margin-top: 1rem; display: inline-block;">Start generating to create one!</a>
+                    </div>
+                `;
+                return;
+            }
+
+            sessions.forEach(session => {
+                const card = document.createElement('div');
+                card.className = 'session-card';
+
+                const date = new Date(session.created_at * 1000).toLocaleString();
+                const imageCount = session.images ? session.images.length : 0;
+
+                let imagesHtml = '';
+                if (session.images && session.images.length > 0) {
+                    imagesHtml = session.images.map(img => `
+                        <div style="position: relative; overflow: hidden; border-radius: 8px; display: block;" 
+                             onmouseenter="this.querySelector('.img-actions').style.opacity=1" 
+                             onmouseleave="this.querySelector('.img-actions').style.opacity=0">
+                            <img src="${img.url}" class="session-image-thumb" alt="${img.prompt}" title="${img.prompt}" style="display: block; width: 100%; height: auto;">
+                            <div class="img-actions" style="position: absolute; bottom: 8px; right: 8px; display: flex; gap: 0.5rem; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); padding: 0.4rem; border-radius: 8px; opacity: 0; transition: opacity 0.2s;">
+                                <a href="${img.url}" download="${img.filename}" class="action-btn" title="Download Image" style="border: none; background: transparent; padding: 0.2rem 0.6rem; box-shadow: none;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                </a>
+                                <button class="action-btn delete" onclick="deleteImage(event, '${img.url}')" title="Delete Image" style="border: none; background: transparent; padding: 0.2rem 0.6rem; box-shadow: none;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    imagesHtml = '<p style="color: var(--text-secondary); grid-column: 1 / -1;">No images remaining in this session.</p>';
+                }
+
+                const thumbnailHtml = (session.images && session.images.length > 0)
+                    ? `<div style="width: 52px; height: 52px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                           <img src="${session.images[0].url}" alt="Session thumbnail" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                       </div>`
+                    : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-glow); flex-shrink: 0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`;
+
+                card.innerHTML = `
+                    <div class="session-header" onclick="toggleSession('${session.id}')">
+                        <div class="session-title-area" style="display: flex; align-items: center; gap: 1rem;">
+                            ${thumbnailHtml}
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <h3 class="session-title" contenteditable="true" onclick="event.stopPropagation()" onblur="renameSession('${session.id}', this.innerText)" onkeydown="if(event.key === 'Enter'){event.preventDefault(); this.blur();}" title="Click to rename session">${session.name}</h3>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); opacity: 0.5;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                                </div>
+                                <div class="session-meta">${date} • ${imageCount} items</div>
+                            </div>
+                        </div>
+                        <div class="session-actions">
+                            <button class="primary-btn" style="padding: 0.4rem 1rem; font-size: 0.85rem;" onclick="resumeSession(event, '${session.id}')">Resume</button>
+                            <button class="action-icon-btn delete" onclick="deleteSession(event, '${session.id}')" title="Delete Session">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="session-body" id="body-${session.id}">
+                        ${imagesHtml}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function toggleSession(id) {
+            const body = document.getElementById(`body-${id}`);
+            if (body) {
+                // If we use display:none to display:grid, we can't easily animate height
+                // but we can toggle the class
+                if (body.style.display === 'grid') {
+                    body.style.display = 'none';
+                } else {
+                    body.style.display = 'grid';
+                }
+            }
+        }
+
+        async function renameSession(id, newName) {
+            const trimmed = newName.trim();
+            if (!trimmed) return;
+
+            try {
+                await fetch(`/api/sessions/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: trimmed })
+                });
+                // Unnecessary to trigger a full re-render on success since DOM is updated
+            } catch (e) {
+                console.error("Failed to rename session", e);
+                fetchSessions(); // revert on fail
+            }
+        }
+
+        async function deleteSession(event, id) {
+            event.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this session and all of its images?")) return;
+
+            try {
+                const response = await fetch(`/api/sessions/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    fetchSessions(); // re-render
+                } else {
+                    alert("Failed to delete session.");
+                }
+            } catch (e) {
+                console.error("Failed to delete session", e);
+            }
+        }
+
+        function resumeSession(event, id) {
+            event.stopPropagation();
+            window.location.href = `/?session_id=${id}`;
+        }
+
+        async function deleteImage(event, imageUrl) {
+            event.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this downloaded image?")) return;
+
+            const filename = imageUrl.split('/').pop();
+            try {
+                const response = await fetch(`/api/image/${filename}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    fetchSessions(); // refresh the grid
+                }
+            } catch (e) {
+                console.error("Failed to delete image", e);
+            }
+        }
+    </script>
+</body>
+
+</html>

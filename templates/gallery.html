@@ -173,77 +173,357 @@
 
     <main class="container" style="max-width: 1000px;">
         <header>
-            <h1 class="glow-text">Gallery</h1>
-            <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 0.5rem;">
-                <p class="subtitle">Your Artwork</p>
+            <h1 class="glow-text" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+                Blacksky Labs
+                <span
+                    style="font-size: 0.45em; font-weight: 400; color: var(--text-secondary); letter-spacing: 1px; margin-top: 0.3rem;">|
+                    Gallery</span>
+            </h1>
+            <div
+                style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
                 <a href="/" class="subtitle"
-                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Back to Generator</a>
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Generate</a>
+                <a href="/sessions" class="subtitle"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Sessions</a>
+                <a href="/gallery" class="subtitle"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Gallery</a>
             </div>
         </header>
 
         <section class="glass-panel" style="padding: 2rem;">
-            {% if images %}
-            <div class="gallery-grid">
-                {% for image in images %}
-                <div class="gallery-item">
-                    <div class="gallery-image-container" onclick="openModal('{{ image.url }}')"
-                        style="cursor: pointer;">
-                        <img src="{{ image.url }}" alt="Generated image for prompt: {{ image.prompt }}" loading="lazy">
-                    </div>
-                    <div class="gallery-info">
-                        <div class="gallery-prompt">{{ image.prompt }}</div>
-                        <div class="gallery-meta">
-                            <span>
-                                <script>
-                                    document.write(new Date({{ image.timestamp * 1000 }}).toLocaleDateString() + ' ' + new Date({{ image.timestamp * 1000 }}).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-                                </script>
-                            </span>
-                            <span>
-                                {% if image.generation_time %}
-                                ⏱ {{ "%.1f"|format(image.generation_time) }}s
+            <section class="glass-panel" style="padding: 2rem;">
+                {% if sessions %}
+                <div class="gallery-accordion">
+                    {% for session in sessions %}
+                    <div class="session-card"
+                        style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 1.5rem; overflow: hidden;">
+
+                        <!-- Session Header (Collapsible) -->
+                        <div class="session-header" onclick="toggleSession('{{ session.id }}')"
+                            style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; transition: background 0.2s;">
+
+                            <div class="session-title-area" style="display: flex; align-items: center; gap: 1rem;">
+                                {% if session.images and session.images|length > 0 %}
+                                <div
+                                    style="width: 52px; height: 52px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                                    <img src="{{ session.images[0].url }}" alt="Session thumbnail"
+                                        style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s;"
+                                        onmouseover="this.style.transform='scale(1.1)'"
+                                        onmouseout="this.style.transform='scale(1)'">
+                                </div>
                                 {% else %}
-                                ⏱ N/A
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" style="color: var(--accent-glow); flex-shrink: 0;">
+                                    <path
+                                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                                    </path>
+                                </svg>
                                 {% endif %}
-                            </span>
+                                <div>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <h3 class="session-title" contenteditable="true"
+                                            onclick="event.stopPropagation()"
+                                            onblur="renameSession('{{ session.id }}', this.innerText)"
+                                            onkeydown="if(event.key === 'Enter'){event.preventDefault(); this.blur();}"
+                                            title="Click to rename session"
+                                            style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin: 0; cursor: text; padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid transparent;">
+                                            {{ session.name }}</h3>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round"
+                                            style="color: var(--text-secondary); opacity: 0.5;">
+                                            <path d="M12 20h9"></path>
+                                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="session-meta" style="font-size: 0.85rem; color: var(--text-secondary);">
+                                        <script>document.write(new Date({{ session.created_at * 1000 }}).toLocaleString())</script>
+                                        • {{ session.images|length }} items
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="session-actions" style="display: flex; gap: 0.75rem;">
+                                <button class="primary-btn" style="padding: 0.4rem 1rem; font-size: 0.85rem;"
+                                    onclick="resumeSession(event, '{{ session.id }}')">Resume</button>
+                                <button class="action-icon-btn delete"
+                                    onclick="deleteSession(event, '{{ session.id }}')" title="Delete Session"
+                                    style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.4rem; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path
+                                            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                        </path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Session Body (Images wrapper) -->
+                        <div class="session-body" id="body-{{ session.id }}" style="display: none; padding: 1.5rem;">
+                            {% if session.images %}
+                            <div class="gallery-grid"
+                                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; width: 100%;">
+                                {% for image in session.images %}
+                                <div class="gallery-item">
+                                    <div class="gallery-image-container" onclick="openModal('{{ image.url }}')"
+                                        style="cursor: pointer;">
+                                        <img src="{{ image.url }}" alt="Generated image for prompt: {{ image.prompt }}"
+                                            loading="lazy">
+                                    </div>
+                                    <div class="gallery-info">
+                                        <div class="gallery-prompt">{{ image.prompt }}</div>
+                                        <div class="gallery-meta">
+                                            <div class="meta-tag">
+                                                <script>
+                                                    document.write(new Date({{ image.timestamp * 1000 }}).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                                                </script>
+                                            </div>
+                                            {% if image.generation_time %}
+                                            <div class="meta-tag">
+                                                <svg xmlns="http://www.w3.org/-2000/svg" width="14" height="14"
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="10"></circle>
+                                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                                </svg>
+                                                {{ "%.1f"|format(image.generation_time) }}s
+                                            </div>
+                                            {% else %}
+                                            <div class="meta-tag">
+                                                <svg xmlns="http://www.w3.org/-2000/svg" width="14" height="14"
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="10"></circle>
+                                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                                </svg>
+                                                N/A
+                                            </div>
+                                            {% endif %}
+                                            <a href="{{ image.url }}" download="{{ image.url.split('/')[-1] }}"
+                                                class="action-btn" title="Download Image"
+                                                style="padding: 0.3rem 0.6rem; border: none; background: transparent; box-shadow: none;"
+                                                onclick="event.stopPropagation()">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                                    style="color: var(--text-secondary);">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                                </svg>
+                                            </a>
+                                            <button class="action-btn delete"
+                                                onclick="deleteImage(event, '{{ image.url }}')" title="Delete Image"
+                                                style="padding: 0.3rem 0.6rem; border: none; background: transparent; box-shadow: none;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                                    style="color: var(--text-secondary);">
+                                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                                    <path
+                                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                    </path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p style="color: var(--text-secondary);">No images in this session.</p>
+                            {% endif %}
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-                <p>No images found in your gallery.</p>
-                <a href="/" style="color: var(--accent-glow); margin-top: 1rem; display: inline-block;">Go create some
-                    art!</a>
-            </div>
-            {% endif %}
-        </section>
+                {% else %}
+                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    <p>No active sessions found.</p>
+                    <a href="/" style="color: var(--accent-glow); margin-top: 1rem; display: inline-block;">Go create
+                        some art!</a>
+                </div>
+                {% endif %}
+            </section>
     </main>
 
     <!-- Full Screen Image Modal -->
     <div id="image-modal" onclick="closeModal()">
         <span class="modal-nav modal-prev" onclick="event.stopPropagation(); navigateModal(-1)">&#9664;</span>
         <span class="modal-nav modal-next" onclick="event.stopPropagation(); navigateModal(1)">&#9654;</span>
-        <div id="modal-content" onclick="event.stopPropagation()">
+        <div id="modal-content" onclick="event.stopPropagation()" style="position: relative;">
             <span class="modal-close" onclick="closeModal()">&times;</span>
             <img id="modal-image" src="" alt="Full screen gallery image">
+            <div
+                style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 0.5rem; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); padding: 0.5rem; border-radius: 8px;">
+                <a id="modal-download" href="#" download class="action-btn" title="Download Image"
+                    style="border: none; background: transparent; padding: 0.3rem 0.6rem; box-shadow: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </a>
+                <button id="modal-delete" class="action-btn delete" onclick="deleteCurrentImageFromModal()"
+                    title="Delete Image"
+                    style="border: none; background: transparent; padding: 0.3rem 0.6rem; box-shadow: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        style="color: #ef4444;">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
+        function toggleSession(id) {
+            const body = document.getElementById(`body-${id}`);
+            if (body) {
+                if (body.style.display === 'grid') {
+                    body.style.display = 'none';
+                } else {
+                    body.style.display = 'grid';
+                }
+            }
+        }
+
+        async function renameSession(id, newName) {
+            const trimmed = newName.trim();
+            if (!trimmed) return;
+
+            try {
+                await fetch(`/api/sessions/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: trimmed })
+                });
+            } catch (e) {
+                console.error("Failed to rename session", e);
+            }
+        }
+
+        async function deleteSession(event, id) {
+            event.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this session and all of its images?")) return;
+
+            try {
+                const response = await fetch(`/api/sessions/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert("Failed to delete session.");
+                }
+            } catch (e) {
+                console.error("Failed to delete session", e);
+            }
+        }
+
+        async function deleteImage(event, imageUrl) {
+            event.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this image?")) return;
+
+            const filename = imageUrl.split('/').pop();
+            try {
+                const response = await fetch(`/api/image/${filename}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    // Remove from modal array
+                    const index = imageUrls.indexOf(imageUrl);
+                    if (index > -1) {
+                        imageUrls.splice(index, 1);
+                    }
+                    // Remove visually from DOM
+                    const imgElement = document.querySelector(`img[src="${imageUrl}"]`);
+                    if (imgElement) {
+                        const gridItem = imgElement.closest('.gallery-item');
+                        if (gridItem) {
+                            gridItem.remove();
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to delete image", e);
+            }
+        }
+
+        async function deleteCurrentImageFromModal() {
+            if (imageUrls.length === 0) return;
+            const currentUrl = imageUrls[currentImageIndex];
+
+            if (!confirm("Are you sure you want to permanently delete this image?")) return;
+
+            const filename = currentUrl.split('/').pop();
+            try {
+                const response = await fetch(`/api/image/${filename}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    // Remove visually from underlying grid
+                    const imgElement = document.querySelector(`img[src="${currentUrl}"]`);
+                    if (imgElement) {
+                        const gridItem = imgElement.closest('.gallery-item');
+                        if (gridItem) {
+                            gridItem.remove();
+                        }
+                    }
+
+                    // Remove from modal state
+                    imageUrls.splice(currentImageIndex, 1);
+
+                    if (imageUrls.length === 0) {
+                        closeModal();
+                    } else {
+                        // Show next image (or wrap around if it was the last one)
+                        if (currentImageIndex >= imageUrls.length) {
+                            currentImageIndex = 0;
+                        }
+                        const newSrc = imageUrls[currentImageIndex];
+                        modalImg.src = newSrc;
+                        modalDownload.href = newSrc;
+                        modalDownload.download = newSrc.split('/').pop();
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to delete image", e);
+            }
+        }
+
+        function resumeSession(event, id) {
+            event.stopPropagation();
+            window.location.href = `/?session_id=${id}`;
+        }
+
         const modal = document.getElementById('image-modal');
         const modalImg = document.getElementById('modal-image');
+        const modalDownload = document.getElementById('modal-download');
 
+        // We collect all URLs into a flat array for the modal
         const imageUrls = [
-            {% for image in images %}
-        "{{ image.url }}"{% if not loop.last %}, {% endif %}
-        {% endfor %}
+            {% for session in sessions %}{% for image in session.images %}
+        "{{ image.url }}",
+            {% endfor %}{% endfor %}
         ];
         let currentImageIndex = 0;
 
         function openModal(imageSrc) {
             currentImageIndex = imageUrls.indexOf(imageSrc);
             modalImg.src = imageSrc;
+            modalDownload.href = imageSrc;
+            modalDownload.download = imageSrc.split('/').pop();
+
             modal.style.display = 'flex';
             // Trigger reflow to ensure the transition works
             void modal.offsetWidth;
@@ -263,12 +543,13 @@
         function navigateModal(direction) {
             if (imageUrls.length === 0) return;
             currentImageIndex += direction;
-            if (currentImageIndex >= imageUrls.length) {
-                currentImageIndex = 0; // Wrap to first
-            } else if (currentImageIndex < 0) {
-                currentImageIndex = imageUrls.length - 1; // Wrap to last
-            }
-            modalImg.src = imageUrls[currentImageIndex];
+            if (currentImageIndex < 0) currentImageIndex = imageUrls.length - 1;
+            if (currentImageIndex >= imageUrls.length) currentImageIndex = 0;
+
+            const newSrc = imageUrls[currentImageIndex];
+            modalImg.src = newSrc;
+            modalDownload.href = newSrc;
+            modalDownload.download = newSrc.split('/').pop();
         }
 
         // Close on Escape key press, navigate on arrow keys

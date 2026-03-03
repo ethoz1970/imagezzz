@@ -9,7 +9,6 @@ import re
 # Configuration
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 VLM_MODEL = "llama3.2-vision" # We use this as our 'Brain'
-MAX_IMAGE_SIZE = 768 # Limit resolution to save RAM
 
 def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> str:
     """
@@ -50,14 +49,15 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
         print("[Brain] Falling back to original prompt.")
         return user_intent
 
-def generate_image_with_flux(prompt: str, output_path: str, progress_callback: callable = None):
+def generate_image_with_flux(prompt: str, output_path: str, size: int = 768, init_image_path: str = None, image_strength: float = 0.4, progress_callback: callable = None):
     """
     Acts as the 'Brush' computing node.
     Takes a detailed prompt and synthesizes a high-fidelity image using Apple MLX (mflux).
     Runs via subprocess to ensure memory is released perfectly after generation.
     Optionally reports generation progress by parsing tqdm output.
+    Supports basic mapping for `--image-path` and `--image-strength` iterative generation mode.
     """
-    print(f"[Brush] Initializing FLUX.1 [schnell] via MLX (mflux-generate @ {MAX_IMAGE_SIZE}x{MAX_IMAGE_SIZE})...")
+    print(f"[Brush] Initializing FLUX.1 [schnell] via MLX (mflux-generate @ {size}x{size})...")
     
     cmd = [
         "mflux-generate",
@@ -65,10 +65,16 @@ def generate_image_with_flux(prompt: str, output_path: str, progress_callback: c
         "--quantize", "4",
         "--prompt", prompt,
         "--steps", "4",
-        "--height", str(MAX_IMAGE_SIZE),
-        "--width", str(MAX_IMAGE_SIZE),
+        "--height", str(size),
+        "--width", str(size),
         "--output", output_path
     ]
+    
+    if init_image_path:
+        cmd.extend([
+            "--image-path", init_image_path,
+            "--image-strength", str(image_strength)
+        ])
     
     try:
         # Run mflux-generate and capture output to parse progress
@@ -106,6 +112,7 @@ def main():
     parser = argparse.ArgumentParser(description="Brain-and-Brush Multimodal Image Synthesis Pipeline")
     parser.add_argument("prompt", type=str, help="The simple user intent or idea to generate.")
     parser.add_argument("--output", type=str, default="output.png", help="Path to save the generated image.")
+    parser.add_argument("--size", type=int, default=768, help="Size of the image (e.g. 512, 768, 1024).")
     parser.add_argument("--skip-brain", action="store_true", help="Skip the LLM expansion and use the raw prompt directly.")
     
     args = parser.parse_args()
@@ -122,7 +129,7 @@ def main():
         
     # Step 2: Brush (Generate Image)
     # Note: CLI doesn't currently accept image, we pass None
-    generate_image_with_flux(final_prompt, args.output)
+    generate_image_with_flux(final_prompt, args.output, args.size)
 
 if __name__ == "__main__":
     main()
