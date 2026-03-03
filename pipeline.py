@@ -4,14 +4,16 @@ import torch
 import argparse
 import sys
 import os
-from diffusers import FluxPipeline
+import base64
+from PIL import Image
+from diffusers import FluxPipeline, FluxImg2ImgPipeline
 
 # Configuration
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 VLM_MODEL = "llama3.2-vision" # We use this as our 'Brain'
 FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell" # We use this as our 'Brush'
 
-def enhance_prompt_with_ollama(user_intent: str) -> str:
+def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> str:
     """
     Acts as the 'Brain' computing node.
     Takes a simple user intent and uses a Vision Language Model to expand it into 
@@ -33,6 +35,10 @@ def enhance_prompt_with_ollama(user_intent: str) -> str:
         "stream": False
     }
     
+    if image_base64:
+        payload["images"] = [image_base64]
+        print("[Brain] Reference image included for prompt expansion.")
+    
     try:
         response = requests.post(OLLAMA_API_URL, json=payload)
         response.raise_for_status()
@@ -45,7 +51,7 @@ def enhance_prompt_with_ollama(user_intent: str) -> str:
         print("[Brain] Falling back to original prompt.")
         return user_intent
 
-def generate_image_with_flux(prompt: str, output_path: str):
+def generate_image_with_flux(prompt: str, output_path: str, init_image_path: str = None, strength: float = 0.75):
     """
     Acts as the 'Brush' computing node.
     Takes a detailed prompt and synthesizes a high-fidelity image using FLUX.1 [schnell] 
@@ -61,29 +67,43 @@ def generate_image_with_flux(prompt: str, output_path: str):
     
     try:
         # 2. Load the Pipeline
-        # Note: Depending on diffusers version, we might need to load components separately 
-        # or use specific sub-configs for Mac. We load the full pipeline here for simplicity.
-        pipe = FluxPipeline.from_pretrained(
-            FLUX_MODEL_ID,
-            torch_dtype=dtype
-        )
+        if init_image_path:
+            pipe = FluxImg2ImgPipeline.from_pretrained(
+                FLUX_MODEL_ID,
+                torch_dtype=dtype
+            )
+        else:
+            pipe = FluxPipeline.from_pretrained(
+                FLUX_MODEL_ID,
+                torch_dtype=dtype
+            )
         
         # Move pipeline to the Metal backend
         pipe.to(device)
         
-        print(f"[Brush] Synthesizing image (4 steps)...")
-        
         # 3. Generate Image
-        # FLUX.1 [schnell] is distilled to generate high quality images in just 1-4 steps.
-        # guidance_scale must be 0.0 for schnell.
-        
-        image = pipe(
-            prompt=prompt,
-            guidance_scale=0.0,
-            num_inference_steps=4,
-            max_sequence_length=256,
-            generator=torch.Generator("cpu").manual_seed(0) # MPS generators can be tricky, using CPU seed for reproducibility
-        ).images[0]
+        if init_image_path:
+            print(f"[Brush] Synthesizing Image-to-Image (strength {strength})...")
+            init_image = Image.open(init_image_path).convert("RGB")
+            
+            # Optionally resize image to save memory, but we'll try full res first
+            image = pipe(
+                prompt=prompt,
+                image=init_image,
+                strength=strength,
+                num_inference_steps=4,
+                guidance_scale=0.0,
+                generator=torch.Generator("cpu").manual_seed(0)
+            ).images[0]
+        else:
+            print(f"[Brush] Synthesizing image (4 steps)...")
+            image = pipe(
+                prompt=prompt,
+                guidance_scale=0.0,
+                num_inference_steps=4,
+                max_sequence_length=256,
+                generator=torch.Generator("cpu").manual_seed(0) 
+            ).images[0]
         
         # 4. Save Output
         image.save(output_path)
@@ -111,9 +131,11 @@ def main():
         final_prompt = args.prompt
         print(f"[Brain] Skipped. Using raw prompt: '{final_prompt}'")
     else:
+        # Note: CLI doesn't currently support image base64, so it passes None
         final_prompt = enhance_prompt_with_ollama(args.prompt)
         
     # Step 2: Brush (Generate Image)
+    # Note: CLI doesn't currently accept image, we pass None
     generate_image_with_flux(final_prompt, args.output)
 
 if __name__ == "__main__":

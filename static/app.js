@@ -14,6 +14,90 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptDetails = document.getElementById('prompt-details');
     const expandedPromptText = document.getElementById('expanded-prompt-text');
 
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const previewContainer = document.getElementById('image-preview-container');
+    const imagePreview = document.getElementById('image-preview');
+    const removeBtn = document.getElementById('remove-image-btn');
+
+    const strengthContainer = document.getElementById('strength-container');
+    const strengthSlider = document.getElementById('strength-slider');
+    const strengthVal = document.getElementById('strength-val');
+
+    let currentImageFile = null;
+
+    // Drag & Drop handlers
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        if (dropZone) dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        if (dropZone) dropZone.addEventListener(eventName, () => dropZone.classList.add('drop-zone--over'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        if (dropZone) dropZone.addEventListener(eventName, () => dropZone.classList.remove('drop-zone--over'), false);
+    });
+
+    if (dropZone) {
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        });
+
+        dropZone.addEventListener('click', () => {
+            if (!currentImageFile) fileInput.click();
+        });
+    }
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function () {
+            handleFiles(this.files);
+        });
+    }
+
+    function handleFiles(files) {
+        if (files.length) {
+            const file = files[0];
+            if (file.type.startsWith('image/')) {
+                currentImageFile = file;
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => {
+                    imagePreview.src = reader.result;
+                    previewContainer.classList.remove('hidden');
+                    strengthContainer.classList.remove('hidden');
+                };
+            } else {
+                alert("Please upload an image file.");
+            }
+        }
+    }
+
+    if (removeBtn) {
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // prevent triggering the click on dropzone
+            currentImageFile = null;
+            fileInput.value = '';
+            imagePreview.src = '';
+            previewContainer.classList.add('hidden');
+            strengthContainer.classList.add('hidden');
+        });
+    }
+
+    // Slider value update
+    if (strengthSlider) {
+        strengthSlider.addEventListener('input', (e) => {
+            strengthVal.textContent = parseFloat(e.target.value).toFixed(2);
+        });
+    }
+
     // Dynamic loading text phases
     const loadingStates = {
         brain: "Brain is analyzing intent and expanding prompt...",
@@ -106,15 +190,18 @@ document.addEventListener('DOMContentLoaded', () => {
             showLoadingPanel(skipBrain);
 
             // API Call
+            const formData = new FormData();
+            formData.append('prompt', prompt);
+            formData.append('skip_brain', skipBrain);
+
+            if (currentImageFile) {
+                formData.append('image', currentImageFile);
+                formData.append('strength', strengthSlider.value);
+            }
+
             const response = await fetch('/api/generate', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    prompt: prompt,
-                    skip_brain: skipBrain
-                })
+                body: formData // Browser automatically sets Content-Type to multipart/form-data with bounds
             });
 
             const data = await response.json();
