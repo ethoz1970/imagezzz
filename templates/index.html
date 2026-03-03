@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symphony - AI Image Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-blob blob-1"></div>
+    <div class="background-blob blob-2"></div>
+
+    <main class="container">
+        <header>
+            <h1 class="glow-text">Symphony</h1>
+            <p class="subtitle">Brain & Brush Multimodal Synthesis</p>
+        </header>
+
+        <section class="generator-panel glass-panel">
+            <form id="generate-form">
+                <div class="input-group">
+                    <label for="prompt-input">What would you like to create?</label>
+                    <textarea id="prompt-input"
+                        placeholder="A red apple on a wood table, sharp focus, beautiful lighting..." rows="3"
+                        required></textarea>
+                </div>
+
+                <div class="controls-row">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="skip-brain">
+                        <span class="slider"></span>
+                        <span class="toggle-label">Skip Brain (Direct to Model)</span>
+                    </label>
+                    <button type="submit" id="generate-btn" class="primary-btn">
+                        <span class="btn-text">Generate Image</span>
+                        <span class="btn-loader hidden"></span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="result-panel glass-panel hidden" id="result-container">
+            <div class="image-wrapper">
+                <img id="generated-image" src="" alt="Generated artwork">
+                <div class="image-overlay hidden" id="loading-overlay">
+                    <div class="spinner"></div>
+                    <p id="loading-text" class="status-text">Brain is analyzing prompt...</p>
+                </div>
+            </div>
+            <div class="prompt-details hidden" id="prompt-details">
+                <h3>Expanded Prompt</h3>
+                <p id="expanded-prompt-text"></p>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
