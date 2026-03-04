@@ -250,6 +250,29 @@ def generate():
         print(f"[API] Outer Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+# --- Admin Authentication ---
+from functools import wraps
+
+def require_admin(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        admin_password = os.environ.get("ADMIN_PASSWORD")
+        # If no password is set in the environment, we assume beta mode is OPEN (or you can disable it)
+        # For security, let's require it to be set to perform destructive actions.
+        if not admin_password:
+            return jsonify({"error": "Admin password not configured on server"}), 403
+            
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Unauthorized"}), 401
+            
+        token = auth_header.split(' ')[1]
+        if token != admin_password:
+            return jsonify({"error": "Invalid admin password"}), 403
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
 # --- REST API For Sessions ---
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
@@ -290,6 +313,7 @@ def get_sessions():
     return jsonify({"sessions": session_list}), 200
 
 @app.route("/api/sessions/<session_id>", methods=["PUT"])
+@require_admin
 def rename_session(session_id):
     data = request.get_json() or {}
     new_name = data.get("name")
@@ -305,6 +329,7 @@ def rename_session(session_id):
     return jsonify({"success": True, "session": sessions[session_id]}), 200
 
 @app.route("/api/sessions/<session_id>", methods=["DELETE"])
+@require_admin
 def delete_session(session_id):
     sessions = load_sessions()
     if session_id not in sessions:
@@ -332,6 +357,7 @@ def delete_session(session_id):
     return jsonify({"success": True}), 200
 
 @app.route("/api/image/<filename>", methods=["DELETE"])
+@require_admin
 def delete_image(filename):
     if not filename.endswith('.png'):
         return jsonify({"error": "Invalid file type"}), 400

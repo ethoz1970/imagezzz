@@ -157,12 +157,68 @@
             opacity: 1;
         }
 
-        .modal-prev {
-            left: 2rem;
-        }
-
         .modal-next {
             right: 2rem;
+        }
+
+        /* Upsell Modal */
+        #upsell-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #upsell-modal.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .upsell-content {
+            background: rgba(20, 20, 30, 0.95);
+            border: 1px solid var(--accent-glow);
+            padding: 3rem;
+            border-radius: 16px;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(0, 200, 255, 0.2);
+            position: relative;
+        }
+
+        .upsell-close {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .upsell-close:hover {
+            color: white;
+        }
+
+        .pro-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--accent-glow), #b200ff);
+            color: white;
+            font-weight: bold;
+            font-size: 0.8rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            margin-bottom: 1.5rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
     </style>
 </head>
@@ -383,7 +439,67 @@
         </div>
     </div>
 
+    <!-- Freemium Upsell Modal -->
+    <div id="upsell-modal" onclick="closeUpsellModal()">
+        <div class="upsell-content" onclick="event.stopPropagation()">
+            <span class="upsell-close" onclick="closeUpsellModal()">&times;</span>
+            <div class="pro-badge">Pro Feature</div>
+            <h2 style="font-family: 'Outfit', sans-serif; font-size: 2rem; margin-bottom: 1rem;">Unlock Session
+                Management</h2>
+            <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 2rem; font-size: 1.1rem;">
+                Upgrade to Blacksky Labs Pro to save your generation history, curate galleries, and seamlessly resume
+                past sessions. Don't lose your masterpieces!
+            </p>
+            <a href="mailto:info@blackskymedia.org?subject=Pro%20Access%20Request" class="primary-btn"
+                style="text-decoration: none; padding: 1rem 2rem; font-size: 1.1rem; display: inline-block; width: 100%; box-sizing: border-box; margin-bottom: 1rem;">
+                Contact Us for Pro Access
+            </a>
+        </div>
+    </div>
+
     <script>
+        // Secret Admin Authentication
+        let adminPassword = localStorage.getItem('symphony_admin_pass') || '';
+
+        document.addEventListener('keydown', function (e) {
+            // Check for Ctrl+Shift+A or Cmd+Shift+A
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                const pass = prompt('Admin Authorization required:');
+                if (pass) {
+                    adminPassword = pass;
+                    localStorage.setItem('symphony_admin_pass', pass);
+                    alert("Admin mode active for this browser.");
+                }
+            }
+        });
+
+        function showUpsell() {
+            const m = document.getElementById('upsell-modal');
+            m.style.display = 'flex';
+            void m.offsetWidth; // flush CSS
+            m.classList.add('active');
+        }
+
+        function closeUpsellModal() {
+            const m = document.getElementById('upsell-modal');
+            m.classList.remove('active');
+            setTimeout(() => { m.style.display = 'none'; }, 300);
+        }
+
+        async function authenticatedFetch(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            if (adminPassword) {
+                options.headers['Authorization'] = `Bearer ${adminPassword}`;
+            }
+            const res = await fetch(url, options);
+            if (res.status === 401 || res.status === 403) {
+                // If it fails authorization and it wasn't a GET, assume it's a blocked action and show upsell
+                showUpsell();
+                throw new Error("Unauthorized: " + res.statusText);
+            }
+            return res;
+        }
         function toggleSession(id) {
             const body = document.getElementById(`body-${id}`);
             if (body) {
@@ -400,22 +516,29 @@
             if (!trimmed) return;
 
             try {
-                await fetch(`/api/sessions/${id}`, {
+                await authenticatedFetch(`/api/sessions/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: trimmed })
                 });
             } catch (e) {
-                console.error("Failed to rename session", e);
+                console.warn("Rename restricted:", e);
+                // The API call blocked it due to lack of admin pass, and showUpsell() was automatically called
+                // Revert visual change locally
+                window.location.reload();
             }
         }
 
         async function deleteSession(event, id) {
             event.stopPropagation();
+            if (!adminPassword) {
+                showUpsell();
+                return;
+            }
             if (!confirm("Are you sure you want to permanently delete this session and all of its images?")) return;
 
             try {
-                const response = await fetch(`/api/sessions/${id}`, {
+                const response = await authenticatedFetch(`/api/sessions/${id}`, {
                     method: 'DELETE'
                 });
                 if (response.ok) {
@@ -424,17 +547,21 @@
                     alert("Failed to delete session.");
                 }
             } catch (e) {
-                console.error("Failed to delete session", e);
+                console.warn("Delete session restricted:", e);
             }
         }
 
         async function deleteImage(event, imageUrl) {
             event.stopPropagation();
+            if (!adminPassword) {
+                showUpsell();
+                return;
+            }
             if (!confirm("Are you sure you want to permanently delete this image?")) return;
 
             const filename = imageUrl.split('/').pop();
             try {
-                const response = await fetch(`/api/image/${filename}`, {
+                const response = await authenticatedFetch(`/api/image/${filename}`, {
                     method: 'DELETE'
                 });
 
@@ -454,19 +581,23 @@
                     }
                 }
             } catch (e) {
-                console.error("Failed to delete image", e);
+                console.warn("Delete image restricted:", e);
             }
         }
 
         async function deleteCurrentImageFromModal() {
             if (imageUrls.length === 0) return;
+            if (!adminPassword) {
+                showUpsell();
+                return;
+            }
             const currentUrl = imageUrls[currentImageIndex];
 
             if (!confirm("Are you sure you want to permanently delete this image?")) return;
 
             const filename = currentUrl.split('/').pop();
             try {
-                const response = await fetch(`/api/image/${filename}`, {
+                const response = await authenticatedFetch(`/api/image/${filename}`, {
                     method: 'DELETE'
                 });
 
@@ -497,12 +628,16 @@
                     }
                 }
             } catch (e) {
-                console.error("Failed to delete image", e);
+                console.warn("Delete restricted:", e);
             }
         }
 
         function resumeSession(event, id) {
             event.stopPropagation();
+            if (!adminPassword) {
+                showUpsell();
+                return;
+            }
             window.location.href = `/?session_id=${id}`;
         }
 
@@ -512,9 +647,11 @@
 
         // We collect all URLs into a flat array for the modal
         const imageUrls = [
-            {% for session in sessions %}{% for image in session.images %}
+            {% for session in sessions %}
+        {% for image in session.images %}
         "{{ image.url }}",
-            {% endfor %}{% endfor %}
+            {% endfor %}
+        {% endfor %}
         ];
         let currentImageIndex = 0;
 
