@@ -8,6 +8,6 @@ nixPkgs = ["python311"]
 cmds = ["python -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements-linux.txt"]
 
 [deploy]
-startCommand = ". /opt/venv/bin/activate && gunicorn --bind 0.0.0.0:$PORT server:app"
+startCommand = ". /opt/venv/bin/activate && gunicorn --bind 0.0.0.0:5075 --timeout 300 server:app"
 healthcheckPath = "/"
 healthcheckTimeout = 100
