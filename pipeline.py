@@ -66,10 +66,13 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
             detailed_prompt = data["choices"][0]["message"]["content"].strip()
             print(f"[Brain] Generated Expanded Prompt (OpenAI):\n--> {detailed_prompt}\n")
             return detailed_prompt
+        except requests.exceptions.HTTPError as e:
+            err_msg = e.response.text if e.response else str(e)
+            print(f"[Brain] OpenAI API Error: {err_msg}")
+            raise Exception(f"OpenAI Error: {err_msg}")
         except Exception as e:
             print(f"[Brain] Error communicating with OpenAI: {e}")
-            print("[Brain] Falling back to original prompt.")
-            return user_intent
+            raise Exception(f"Failed to connect to OpenAI: {e}")
             
     # Fallback to local Ollama
     print(f"\n[Brain] Local Execution. Routing to Ollama ({VLM_MODEL})...")
@@ -93,8 +96,7 @@ def enhance_prompt_with_ollama(user_intent: str, image_base64: str = None) -> st
         return detailed_prompt
     except Exception as e:
         print(f"[Brain] Error communicating with Ollama: {e}")
-        print("[Brain] Falling back to original prompt.")
-        return user_intent
+        raise Exception("Ollama is not running locally. Please start Ollama or add an OPENAI_API_KEY to your environment variables.")
 
 def generate_image_with_flux(prompt: str, output_path: str, size: int = 768, init_image_path: str = None, image_strength: float = 0.4, progress_callback: callable = None):
     """
