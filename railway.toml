@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [build.nixpacksPlan.phases.setup]
-nixPkgs = ["python311"]
+nixPkgs = ["python311", "stdenv.cc.cc.lib"]
 
 [build.nixpacksPlan.phases.install]
 cmds = ["python -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements-linux.txt"]
