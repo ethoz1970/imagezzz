@@ -96,15 +96,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p class="generation-timer" style="font-size: 0.9rem; margin-top: 0.5rem;">0.0s</p>
                 </div>
             </div>
-            <div class="image-actions" style="margin-top: 0.75rem; display: flex; justify-content: flex-end; align-items: center;">
-                <a href="#" download class="action-btn download-btn hidden" style="margin-right: 0.5rem;" title="Download Artwork">
+            <div class="image-actions" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; width: 100%; padding: 0.5rem 1rem 1rem 1rem;">
+                <a href="#" download class="action-btn download-btn hidden" style="flex: 0 0 auto; padding: 0.5rem 1rem; justify-content: center;" title="Download Artwork">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
+                    <span style="margin-left: 0.4rem; font-size: 0.85rem;">Download</span>
                 </a>
-                <button type="button" class="action-btn set-reference-btn hidden" title="Use as Reference Image for next generation">
+                <button type="button" class="action-btn set-reference-btn hidden" title="Use as Reference Image for next generation" style="flex: 1; padding: 0.5rem; justify-content: center;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.4rem;">
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="12" y1="8" x2="12" y2="12"></line>

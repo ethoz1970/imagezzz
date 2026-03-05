@@ -664,3 +664,70 @@ input:checked~.toggle-label {
     transition: width 0.3s ease;
     box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 600px) {
+    body {
+        padding: 1rem 0.5rem;
+    }
+
+    header h1.glow-text {
+        font-size: 2.5rem;
+        flex-direction: column;
+        gap: 0.2rem !important;
+    }
+
+    header div {
+        gap: 1rem !important;
+    }
+
+    .subtitle {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+    }
+
+    .glass-panel {
+        padding: 1rem;
+        border-radius: 16px;
+    }
+
+    .radio-group {
+        flex-direction: column;
+        border-radius: 12px;
+    }
+
+    .radio-label {
+        border-radius: 8px;
+    }
+
+    .controls-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1.5rem;
+    }
+
+    .controls-row>div {
+        flex-direction: column;
+        width: 100%;
+        gap: 1rem !important;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+        width: 100%;
+        margin-left: 0 !important;
+    }
+
+    .image-wrapper {
+        min-height: 200px;
+    }
+
+    .prompt-details {
+        padding-top: 1rem;
+    }
+
+    #reference-panel>div:last-child {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
