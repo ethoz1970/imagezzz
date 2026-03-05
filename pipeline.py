@@ -155,11 +155,13 @@ def generate_image_with_flux(prompt: str, output_path: str, size: int = 768, ini
             print(f"[Brush] Success! Cloud image downloaded and saved to: {output_path}")
             return
             
+        except requests.exceptions.HTTPError as e:
+            err_msg = e.response.text if e.response else str(e)
+            print(f"[Brush] Fal.ai API Error: {err_msg}")
+            raise Exception(f"Fal.ai Error: {err_msg}")
         except Exception as e:
             print(f"[Brush] Error communicating with Fal.ai: {e}")
-            print("[Brush] Falling back to local generation...")
-            # Fall through to local generation below if cloud fails
-
+            raise Exception(f"Failed to connect to Fal.ai: {e}")
     if platform.system() == "Darwin":
         print(f"[Brush] Apple Silicon Detected. Initializing FLUX.1 [schnell] via MLX (mflux-generate @ {size}x{size})...")
         
