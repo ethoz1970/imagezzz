@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptInput = document.getElementById('prompt-input');
     const skipBrainToggle = document.getElementById('skip-brain');
     const sizeRadios = document.querySelectorAll('input[name="size"]');
+    const freemiumRadios = document.querySelectorAll('.freemium-restricted');
+
     const generateBtn = document.getElementById('generate-btn');
     const btnText = generateBtn.querySelector('.btn-text');
     const btnLoader = generateBtn.querySelector('.btn-loader');
@@ -45,6 +47,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let loadingInterval;
     let timerInterval;
     let startTime;
+
+    // Freemium Radio Listeners
+    freemiumRadios.forEach(radio => {
+        radio.addEventListener('click', (e) => {
+            if (!localStorage.getItem('admin_token')) {
+                e.preventDefault();
+                window.openUpsellModal();
+            }
+        });
+    });
+
+    // Image Modal Event Delegation
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('generated-image')) {
+            window.openModal(e.target.src);
+        }
+    });
 
     const updateLoadingText = (skipBrain, statusTextElement) => {
         if (skipBrain) {
@@ -263,11 +282,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const selectedSizeElement = document.querySelector('input[name="size"]:checked');
             const selectedSize = selectedSizeElement ? selectedSizeElement.value : '768';
 
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            const adminToken = localStorage.getItem('admin_token');
+            if (adminToken) {
+                headers['Authorization'] = `Bearer ${adminToken}`;
+            }
+
             const response = await fetch('/api/generate', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: headers,
                 body: JSON.stringify({
                     prompt: finalPrompt,
                     skip_brain: true,
@@ -503,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         wrapper.innerHTML = `
                             <div class="result-image-container">
-                                <img src="${img.url}" alt="${img.prompt}">
+                                <img src="${img.url}" alt="${img.prompt}" class="generated-image" style="cursor: pointer;">
                                 ${actionsHtml}
                             </div>
                         `;
@@ -525,5 +551,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })
             .catch(err => console.error("Error loading resumed session:", err));
+    }
+});
+
+// Modal Logic
+window.openModal = function (imageSrc) {
+    const modal = document.getElementById('image-modal');
+    const modalImg = document.getElementById('modal-image');
+    if (modal && modalImg) {
+        modalImg.src = imageSrc;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+};
+
+window.closeModal = function () {
+    const modal = document.getElementById('image-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+};
+
+window.openUpsellModal = function () {
+    const modal = document.getElementById('upsell-modal');
+    if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+};
+
+window.closeUpsellModal = function () {
+    const modal = document.getElementById('upsell-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+};
+
+// Admin Login Shortcut (Ctrl+Shift+A)
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const pwd = prompt("Enter Admin Password:");
+        if (pwd) {
+            localStorage.setItem('admin_token', pwd);
+            alert("Admin token saved locally. Pro features unlocked.");
+        } else {
+            localStorage.removeItem('admin_token');
+            alert("Admin token cleared.");
+        }
     }
 });

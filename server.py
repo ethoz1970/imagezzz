@@ -131,6 +131,18 @@ def generate():
         if not prompt:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
+        # Freemium Size Restriction Check
+        if size > 512:
+            admin_password = os.environ.get('ADMIN_PASSWORD')
+            if admin_password:
+                auth_header = request.headers.get('Authorization')
+                if not auth_header or not auth_header.startswith('Bearer '):
+                    return jsonify({"error": "Pro Access required for Medium and Large images."}), 403
+                
+                token = auth_header.split(' ')[1]
+                if token != admin_password:
+                    return jsonify({"error": "Invalid Admin Token. Pro Access required."}), 403
+
         # Session tracking
         sessions = load_sessions()
         session_name = ""
