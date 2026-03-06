@@ -295,6 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lines = buffer.split('\n\n');
                 buffer = lines.pop();
 
+                let shouldBreak = false;
+
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         const dataStr = line.slice(6);
@@ -315,14 +317,22 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                 }
                                 displayResult(uiRefs, data.image_url, finalPrompt);
+                                shouldBreak = true;
                             } else if (data.status === 'error') {
                                 throw new Error(data.error);
                             }
                         } catch (e) {
-                            console.error("Failed to parse stream chunk", e, dataStr);
+                            // If the parsing fails above or we purposefully throw an Error to exit
+                            if (e.message && e.message !== "Failed to parse stream chunk") {
+                                throw e; // Let it propagate to the outer catch(error)
+                            } else {
+                                console.error("Failed to parse stream chunk", e, dataStr);
+                            }
                         }
                     }
                 }
+
+                if (shouldBreak) break;
             }
         } catch (error) {
             handleError(uiRefs, error);
