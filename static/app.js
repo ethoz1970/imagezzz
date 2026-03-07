@@ -49,17 +49,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/limits', { headers });
             if (response.ok) {
                 const data = await response.json();
-                generationCounter.classList.remove('hidden');
 
-                if (data.is_pro) {
-                    generationsLeftText.textContent = "Pro User";
-                    generationsLeftText.style.color = "var(--accent-glow)";
-                } else {
-                    generationsLeftText.textContent = `${data.remaining}/${data.total} Left`;
-                    if (data.remaining === 0) {
-                        generationsLeftText.style.color = "#ff4444";
+                if (generationCounter && generationsLeftText) {
+                    generationCounter.classList.remove('hidden');
+                    if (data.is_pro) {
+                        generationsLeftText.textContent = "Pro User";
+                        generationsLeftText.style.color = "var(--accent-glow)";
                     } else {
-                        generationsLeftText.style.color = "white";
+                        generationsLeftText.textContent = `${data.remaining}/${data.total} Left`;
+                        if (data.remaining === 0) {
+                            generationsLeftText.style.color = "#ff4444";
+                        } else {
+                            generationsLeftText.style.color = "white";
+                        }
                     }
                 }
             }
@@ -422,31 +424,35 @@ document.addEventListener('DOMContentLoaded', () => {
         btnText.textContent = "Generate Image";
     }
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        if (currentPhase === 'initial') {
+            if (currentPhase === 'initial') {
+                const prompt = promptInput.value.trim();
+                if (!prompt) return;
+                const skipBrain = skipBrainToggle.checked;
+
+                if (skipBrain) {
+                    handleGenerationPhase(prompt);
+                } else {
+                    handleElaborationPhase(prompt, false);
+                }
+            } else if (currentPhase === 'review') {
+                const finalPrompt = elaboratedPromptTextarea.value.trim();
+                if (!finalPrompt) return;
+                handleGenerationPhase(finalPrompt);
+            }
+        });
+    }
+
+    if (rerollBtn) {
+        rerollBtn.addEventListener('click', () => {
             const prompt = promptInput.value.trim();
             if (!prompt) return;
-            const skipBrain = skipBrainToggle.checked;
-
-            if (skipBrain) {
-                handleGenerationPhase(prompt);
-            } else {
-                handleElaborationPhase(prompt, false);
-            }
-        } else if (currentPhase === 'review') {
-            const finalPrompt = elaboratedPromptTextarea.value.trim();
-            if (!finalPrompt) return;
-            handleGenerationPhase(finalPrompt);
-        }
-    });
-
-    rerollBtn.addEventListener('click', () => {
-        const prompt = promptInput.value.trim();
-        if (!prompt) return;
-        handleElaborationPhase(prompt, false);
-    });
+            handleElaborationPhase(prompt, false);
+        });
+    }
 
     newPromptBtn.addEventListener('click', () => {
         promptInput.value = '';

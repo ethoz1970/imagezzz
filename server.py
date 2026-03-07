@@ -66,7 +66,24 @@ def sessions_page():
 
 @app.route("/gallery")
 def gallery():
+    is_pro = False
+    admin_password = os.environ.get('ADMIN_PASSWORD')
+    if admin_password:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            if token == admin_password:
+                is_pro = True
+
+    tracking_id = request.cookies.get("tracking_id")
+    if not tracking_id:
+        tracking_id = request.remote_addr or "unknown_user"
+        
     sessions = load_sessions()
+    
+    # Filter sessions for non-admin users
+    if not is_pro:
+        sessions = {k: v for k, v in sessions.items() if v.get('tracking_id') == tracking_id}
     
     # Enrich sessions with their images
     for sid in sessions.keys():
@@ -86,6 +103,10 @@ def gallery():
                     except Exception:
                         pass
                 
+                # Check image ownership for non-admin users
+                if not is_pro and meta.get('tracking_id') != tracking_id:
+                    continue
+                
                 sid = meta.get('session_id')
                 if sid and sid in sessions:
                     sessions[sid]['images'].append({
@@ -96,9 +117,8 @@ def gallery():
                         'generation_time': meta.get('generation_time', None),
                         'timestamp': meta.get('timestamp', os.path.getctime(image_path))
                     })
-                else:
-                    # If an image has no session (e.g. from old version), make a dummy legacy session or group them?
-                    # For now we'll put them in a "Legacy Images" session
+                elif is_pro:
+                    # Admins can see raw un-sessioned legacy images
                     if "legacy" not in sessions:
                         sessions["legacy"] = {
                             "id": "legacy",
@@ -166,16 +186,16 @@ def generate():
                 if token == admin_password:
                     is_pro = True
 
+        tracking_id = request.cookies.get("tracking_id")
+        if not tracking_id:
+            tracking_id = request.remote_addr or "unknown_user"
+
         if not is_pro:
             # Freemium Size Restriction Check
             if size > 512:
                 return jsonify({"error": "Pro Access required for Medium and Large images."}), 403
 
             # Daily Generation Limit Check
-            tracking_id = request.cookies.get("tracking_id")
-            if not tracking_id:
-                # Fallback to IP if cookie missing
-                tracking_id = request.remote_addr or "unknown_user"
                 
             today = datetime.datetime.now().strftime("%Y-%m-%d")
             limits = load_daily_limits()
@@ -202,7 +222,8 @@ def generate():
             sessions[session_id] = {
                 "id": session_id,
                 "name": session_name,
-                "created_at": time.time()
+                "created_at": time.time(),
+                "tracking_id": tracking_id
             }
             save_sessions(sessions)
         else:
@@ -271,7 +292,8 @@ def generate():
                             "original_prompt": prompt,
                             "timestamp": time.time(),
                             "generation_time": generation_time,
-                            "session_id": session_id
+                            "session_id": session_id,
+                            "tracking_id": tracking_id
                         }
                         meta_filename = filename.replace('.png', '.json')
                         with open(os.path.join(OUTPUT_DIR, meta_filename), 'w') as f:
@@ -337,8 +359,25 @@ def require_admin(f):
 # --- REST API For Sessions ---
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
+    is_pro = False
+    admin_password = os.environ.get('ADMIN_PASSWORD')
+    if admin_password:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            if token == admin_password:
+                is_pro = True
+
+    tracking_id = request.cookies.get("tracking_id")
+    if not tracking_id:
+        tracking_id = request.remote_addr or "unknown_user"
+        
     sessions = load_sessions()
     
+    # Filter sessions for non-admin users
+    if not is_pro:
+        sessions = {k: v for k, v in sessions.items() if v.get('tracking_id') == tracking_id}
+
     # Enrich sessions with their images
     for sid in sessions.keys():
         sessions[sid]['images'] = []
@@ -356,6 +395,10 @@ def get_sessions():
                             meta = json.load(f)
                     except Exception:
                         pass
+                
+                # Check image ownership for non-admin users
+                if not is_pro and meta.get('tracking_id') != tracking_id:
+                    continue
                 
                 sid = meta.get('session_id')
                 if sid and sid in sessions:
