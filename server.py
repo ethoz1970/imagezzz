@@ -54,6 +54,16 @@ def ensure_tracking_cookie(resp):
         resp.set_cookie("tracking_id", str(uuid.uuid4()), max_age=60*60*24*365*10)
     return resp
 
+def _check_admin():
+    admin_password = os.environ.get('ADMIN_PASSWORD')
+    if admin_password:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            if token == admin_password:
+                return True
+    return False
+
 @app.route("/")
 def index():
     resp = make_response(render_template("index.html"))
@@ -66,35 +76,35 @@ def sessions_page():
 
 @app.route("/gallery")
 def gallery():
-    is_pro = False
-    admin_password = os.environ.get('ADMIN_PASSWORD')
-    if admin_password:
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            if token == admin_password:
-                is_pro = True
+    is_pro = _check_admin()
 
     tracking_id = request.cookies.get("tracking_id")
     if not tracking_id:
         tracking_id = request.remote_addr or "unknown_user"
-        
-    sessions = load_sessions()
-    
-    # Filter sessions for non-admin users
-    if not is_pro:
-        sessions = {k: v for k, v in sessions.items() if v.get('tracking_id') == tracking_id}
-    
-    # Enrich sessions with their images
-    for sid in sessions.keys():
-        sessions[sid]['images'] = []
 
+    all_sessions = load_sessions()
+
+    # Private sessions: user's own (or all for admin)
+    if is_pro:
+        private_sessions = dict(all_sessions)
+    else:
+        private_sessions = {k: v for k, v in all_sessions.items() if v.get('tracking_id') == tracking_id}
+
+    # Public sessions: all sessions with public images, grouped by session
+    public_sessions = {}
+
+    # Enrich sessions with their images
+    for sid in private_sessions.keys():
+        private_sessions[sid]['images'] = []
+        private_sessions[sid]['is_public'] = private_sessions[sid].get('public', False)
+
+    # Read all images once
     if os.path.exists(OUTPUT_DIR):
         for filename in sorted(os.listdir(OUTPUT_DIR), reverse=True):
             if filename.endswith(".png"):
                 image_path = os.path.join(OUTPUT_DIR, filename)
                 metadata_path = image_path.replace('.png', '.json')
-                
+
                 meta = {}
                 if os.path.exists(metadata_path):
                     try:
@@ -102,47 +112,60 @@ def gallery():
                             meta = json.load(f)
                     except Exception:
                         pass
-                
-                # Check image ownership for non-admin users
-                if not is_pro and meta.get('tracking_id') != tracking_id:
-                    continue
-                
+
                 sid = meta.get('session_id')
-                if sid and sid in sessions:
-                    sessions[sid]['images'].append({
-                        'filename': filename,
-                        'url': f"/static/outputs/{filename}",
-                        'prompt': meta.get('prompt', 'N/A'),
-                        'original_prompt': meta.get('original_prompt', ''),
-                        'generation_time': meta.get('generation_time', None),
-                        'timestamp': meta.get('timestamp', os.path.getctime(image_path))
-                    })
-                elif is_pro:
-                    # Admins can see raw un-sessioned legacy images
-                    if "legacy" not in sessions:
-                        sessions["legacy"] = {
+                is_public_image = meta.get('public', False)
+
+                image_data = {
+                    'filename': filename,
+                    'url': f"/static/outputs/{filename}",
+                    'prompt': meta.get('prompt', 'N/A'),
+                    'original_prompt': meta.get('original_prompt', ''),
+                    'generation_time': meta.get('generation_time', None),
+                    'timestamp': meta.get('timestamp', os.path.getctime(image_path)),
+                    'is_public': is_public_image
+                }
+
+                # Add to private sessions (user's own)
+                is_owned = is_pro or meta.get('tracking_id') == tracking_id
+                if is_owned and sid and sid in private_sessions:
+                    private_sessions[sid]['images'].append(image_data)
+                elif is_owned and is_pro and sid and sid not in private_sessions:
+                    if "legacy" not in private_sessions:
+                        private_sessions["legacy"] = {
                             "id": "legacy",
                             "name": "Legacy Images",
                             "created_at": 0,
                             "images": []
                         }
-                    sessions["legacy"]['images'].append({
+                    private_sessions["legacy"]['images'].append(image_data)
+
+                # Add to public sessions (all public images from all users)
+                if is_public_image and sid and sid in all_sessions:
+                    if sid not in public_sessions:
+                        public_sessions[sid] = {
+                            "id": sid,
+                            "name": all_sessions[sid].get("name", "Unnamed Session"),
+                            "created_at": all_sessions[sid].get("created_at", 0),
+                            "images": []
+                        }
+                    # Public view: only show safe fields (no tracking_id, no generation_time)
+                    public_sessions[sid]['images'].append({
                         'filename': filename,
                         'url': f"/static/outputs/{filename}",
-                        'prompt': meta.get('prompt', 'N/A'),
                         'original_prompt': meta.get('original_prompt', ''),
-                        'generation_time': meta.get('generation_time', None),
                         'timestamp': meta.get('timestamp', os.path.getctime(image_path))
                     })
-                    
-    # Return as list sorted by creation time (newest first)
-    session_list = list(sessions.values())
-    session_list.sort(key=lambda x: x.get('created_at', 0), reverse=True)
-    
-    # Filter out empty sessions just for the gallery view
-    session_list = [s for s in session_list if len(s.get('images', [])) > 0]
-    
-    resp = make_response(render_template("gallery.html", sessions=session_list))
+
+    # Sort and filter
+    private_list = list(private_sessions.values())
+    private_list.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+    private_list = [s for s in private_list if len(s.get('images', [])) > 0]
+
+    public_list = list(public_sessions.values())
+    public_list.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+
+    resp = make_response(render_template("gallery.html", private_sessions=private_list, public_sessions=public_list))
     return ensure_tracking_cookie(resp)
 
 @app.route("/api/elaborate_prompt", methods=["POST"])
@@ -177,14 +200,7 @@ def generate():
         if not prompt:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
-        is_pro = False
-        admin_password = os.environ.get('ADMIN_PASSWORD')
-        if admin_password:
-            auth_header = request.headers.get('Authorization')
-            if auth_header and auth_header.startswith('Bearer '):
-                token = auth_header.split(' ')[1]
-                if token == admin_password:
-                    is_pro = True
+        is_pro = _check_admin()
 
         tracking_id = request.cookies.get("tracking_id")
         if not tracking_id:
@@ -293,7 +309,8 @@ def generate():
                             "timestamp": time.time(),
                             "generation_time": generation_time,
                             "session_id": session_id,
-                            "tracking_id": tracking_id
+                            "tracking_id": tracking_id,
+                            "public": False
                         }
                         meta_filename = filename.replace('.png', '.json')
                         with open(os.path.join(OUTPUT_DIR, meta_filename), 'w') as f:
@@ -359,21 +376,14 @@ def require_admin(f):
 # --- REST API For Sessions ---
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
-    is_pro = False
-    admin_password = os.environ.get('ADMIN_PASSWORD')
-    if admin_password:
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            if token == admin_password:
-                is_pro = True
+    is_pro = _check_admin()
 
     tracking_id = request.cookies.get("tracking_id")
     if not tracking_id:
         tracking_id = request.remote_addr or "unknown_user"
-        
+
     sessions = load_sessions()
-    
+
     # Filter sessions for non-admin users
     if not is_pro:
         sessions = {k: v for k, v in sessions.items() if v.get('tracking_id') == tracking_id}
@@ -381,13 +391,14 @@ def get_sessions():
     # Enrich sessions with their images
     for sid in sessions.keys():
         sessions[sid]['images'] = []
+        sessions[sid]['is_public'] = sessions[sid].get('public', False)
 
     if os.path.exists(OUTPUT_DIR):
         for filename in sorted(os.listdir(OUTPUT_DIR), reverse=True):
             if filename.endswith(".png"):
                 image_path = os.path.join(OUTPUT_DIR, filename)
                 metadata_path = image_path.replace('.png', '.json')
-                
+
                 meta = {}
                 if os.path.exists(metadata_path):
                     try:
@@ -395,11 +406,11 @@ def get_sessions():
                             meta = json.load(f)
                     except Exception:
                         pass
-                
+
                 # Check image ownership for non-admin users
                 if not is_pro and meta.get('tracking_id') != tracking_id:
                     continue
-                
+
                 sid = meta.get('session_id')
                 if sid and sid in sessions:
                     sessions[sid]['images'].append({
@@ -408,9 +419,10 @@ def get_sessions():
                         'prompt': meta.get('prompt', 'N/A'),
                         'original_prompt': meta.get('original_prompt', ''),
                         'generation_time': meta.get('generation_time', None),
-                        'timestamp': meta.get('timestamp', os.path.getctime(image_path))
+                        'timestamp': meta.get('timestamp', os.path.getctime(image_path)),
+                        'is_public': meta.get('public', False)
                     })
-                    
+
     # Return as list sorted by creation time (newest first)
     session_list = list(sessions.values())
     session_list.sort(key=lambda x: x.get('created_at', 0), reverse=True)
@@ -462,14 +474,7 @@ def delete_session(session_id):
 
 @app.route("/api/limits", methods=["GET"])
 def get_limits():
-    is_pro = False
-    admin_password = os.environ.get('ADMIN_PASSWORD')
-    if admin_password:
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            if token == admin_password:
-                is_pro = True
+    is_pro = _check_admin()
 
     if is_pro:
         return jsonify({"is_pro": True, "remaining": "∞"})
@@ -507,6 +512,66 @@ def delete_image(filename):
             return jsonify({"error": str(e)}), 500
     else:
         return jsonify({"error": "Image not found"}), 404
+
+@app.route("/api/image/<filename>/public", methods=["PATCH"])
+def toggle_image_public(filename):
+    if not filename.endswith('.png'):
+        return jsonify({"error": "Invalid file type"}), 400
+
+    metadata_path = os.path.join(OUTPUT_DIR, filename.replace('.png', '.json'))
+    if not os.path.exists(metadata_path):
+        return jsonify({"error": "Image metadata not found"}), 404
+
+    try:
+        with open(metadata_path, 'r') as f:
+            meta = json.load(f)
+    except Exception:
+        return jsonify({"error": "Failed to read metadata"}), 500
+
+    # Check ownership or admin
+    tracking_id = request.cookies.get("tracking_id") or request.remote_addr or "unknown_user"
+    is_admin = _check_admin()
+    if not is_admin and meta.get('tracking_id') != tracking_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    meta['public'] = not meta.get('public', False)
+    with open(metadata_path, 'w') as f:
+        json.dump(meta, f)
+
+    return jsonify({"success": True, "public": meta['public']}), 200
+
+@app.route("/api/sessions/<session_id>/public", methods=["PATCH"])
+def toggle_session_public(session_id):
+    sessions = load_sessions()
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+
+    # Check ownership or admin
+    tracking_id = request.cookies.get("tracking_id") or request.remote_addr or "unknown_user"
+    is_admin = _check_admin()
+    if not is_admin and sessions[session_id].get('tracking_id') != tracking_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    new_public = not sessions[session_id].get('public', False)
+    sessions[session_id]['public'] = new_public
+    save_sessions(sessions)
+
+    # Bulk-update all image metadata files in this session
+    if os.path.exists(OUTPUT_DIR):
+        for filename in os.listdir(OUTPUT_DIR):
+            if filename.endswith(".json") and filename != "sessions.json" and filename != "daily_limits.json":
+                meta_path = os.path.join(OUTPUT_DIR, filename)
+                try:
+                    with open(meta_path, 'r') as f:
+                        meta = json.load(f)
+                    if meta.get('session_id') == session_id:
+                        meta['public'] = new_public
+                        with open(meta_path, 'w') as f:
+                            json.dump(meta, f)
+                except Exception:
+                    pass
+
+    return jsonify({"success": True, "public": new_public}), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5075))

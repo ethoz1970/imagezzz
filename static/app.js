@@ -496,10 +496,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const newName = currentSessionName.innerText.trim();
         if (!newName) return;
 
+        const headers = { 'Content-Type': 'application/json' };
+        const adminToken = localStorage.getItem('admin_token');
+        if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
+
         try {
             await fetch(`/api/sessions/${currentSessionId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify({ name: newName })
             });
         } catch (e) {

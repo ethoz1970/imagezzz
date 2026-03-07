@@ -246,10 +246,93 @@
             </div>
         </header>
 
+        <!-- Public Gallery Section -->
+        <section class="glass-panel gallery-panel" style="margin-bottom: 2rem;">
+            <div class="section-toggle" onclick="toggleGallerySection('public-section')" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1rem;">
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-glow);">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    Public Gallery
+                </h2>
+                <span id="public-section-arrow" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.3s;">&#9660;</span>
+            </div>
+            <div id="public-section">
+                {% if public_sessions %}
+                <div class="gallery-accordion">
+                    {% for session in public_sessions %}
+                    <div class="session-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 1.5rem; overflow: hidden;">
+                        <div class="session-header" onclick="toggleSession('pub-{{ session.id }}')" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; transition: background 0.2s;">
+                            <div class="session-title-area" style="display: flex; align-items: center; gap: 1rem;">
+                                {% if session.images and session.images|length > 0 %}
+                                <div style="width: 52px; height: 52px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                                    <img src="{{ session.images[0].url }}" alt="Session thumbnail" style="width: 100%; height: 100%; object-fit: cover;">
+                                </div>
+                                {% endif %}
+                                <div>
+                                    <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin: 0;">{{ session.name }}</h3>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">{{ session.images|length }} items</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="session-body" id="body-pub-{{ session.id }}" style="display: none; padding: 1.5rem;">
+                            <div class="gallery-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; width: 100%;">
+                                {% for image in session.images %}
+                                <div class="gallery-item">
+                                    <div class="gallery-image-container" onclick="openModal('{{ image.url }}')" style="cursor: pointer;">
+                                        <img src="{{ image.url }}" alt="Generated image" loading="lazy">
+                                    </div>
+                                    <div class="gallery-info">
+                                        <div class="gallery-prompt">{{ image.original_prompt }}</div>
+                                        <div class="gallery-meta">
+                                            <div class="meta-tag">
+                                                <script>document.write(new Date({{ image.timestamp * 1000 }}).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));</script>
+                                            </div>
+                                        </div>
+                                        <div class="gallery-actions" style="display: flex; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                                            <a href="{{ image.url }}" download="{{ image.url.split('/')[-1] }}" class="action-btn" title="Download Image" style="flex: 1; padding: 0.5rem; justify-content: center;" onclick="event.stopPropagation()">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                                </svg>
+                                                <span style="margin-left: 0.4rem; font-size: 0.85rem;">Download</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <p>No public images yet. Share your sessions to make them visible here!</p>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <!-- My Images (Private) Section -->
         <section class="glass-panel gallery-panel">
-            {% if sessions %}
+            <div class="section-toggle" onclick="toggleGallerySection('private-section')" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1rem;">
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    My Images
+                </h2>
+                <span id="private-section-arrow" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.3s; transform: rotate(-90deg);">&#9660;</span>
+            </div>
+            <div id="private-section" style="display: none;">
+            {% if private_sessions %}
             <div class="gallery-accordion">
-                {% for session in sessions %}
+                {% for session in private_sessions %}
                 <div class="session-card"
                     style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 1.5rem; overflow: hidden;">
 
@@ -297,6 +380,13 @@
                         </div>
 
                         <div class="session-actions" style="display: flex; gap: 0.75rem;">
+                            <button class="action-icon-btn" onclick="toggleSessionPublic(event, '{{ session.id }}', this)" title="Toggle Public/Private"
+                                style="background: none; border: none; color: {{ 'var(--accent-glow)' if session.get('is_public', false) else 'var(--text-secondary)' }}; cursor: pointer; padding: 0.4rem; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
                             <button class="primary-btn" style="padding: 0.4rem 1rem; font-size: 0.85rem;"
                                 onclick="resumeSession(event, '{{ session.id }}')">Resume</button>
                             <button class="action-icon-btn delete" onclick="deleteSession(event, '{{ session.id }}')"
@@ -358,6 +448,13 @@
                                     </div>
                                     <div class="gallery-actions"
                                         style="display: flex; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                                        <button class="action-btn" onclick="toggleImagePublic(event, '{{ image.filename }}', this)" title="Toggle Public/Private"
+                                            style="padding: 0.5rem; justify-content: center; color: {{ 'var(--accent-glow)' if image.is_public else 'var(--text-secondary)' }};">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                <circle cx="12" cy="12" r="3"></circle>
+                                            </svg>
+                                        </button>
                                         <a href="{{ image.url }}" download="{{ image.url.split('/')[-1] }}"
                                             class="action-btn" title="Download Image"
                                             style="flex: 1; padding: 0.5rem; justify-content: center;"
@@ -403,6 +500,7 @@
                     some art!</a>
             </div>
             {% endif %}
+            </div>
         </section>
     </main>
 
@@ -458,7 +556,7 @@
 
     <script>
         // Secret Admin Authentication
-        let adminPassword = localStorage.getItem('symphony_admin_pass') || '';
+        let adminPassword = localStorage.getItem('admin_token') || '';
 
         document.addEventListener('keydown', function (e) {
             // Check for Ctrl+Shift+A or Cmd+Shift+A
@@ -467,7 +565,7 @@
                 const pass = prompt('Admin Authorization required:');
                 if (pass) {
                     adminPassword = pass;
-                    localStorage.setItem('symphony_admin_pass', pass);
+                    localStorage.setItem('admin_token', pass);
                     alert("Admin mode active for this browser.");
                 }
             }
@@ -499,6 +597,20 @@
             }
             return res;
         }
+        function toggleGallerySection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const arrow = document.getElementById(sectionId + '-arrow');
+            if (section) {
+                if (section.style.display === 'none') {
+                    section.style.display = 'block';
+                    if (arrow) arrow.style.transform = 'rotate(0deg)';
+                } else {
+                    section.style.display = 'none';
+                    if (arrow) arrow.style.transform = 'rotate(-90deg)';
+                }
+            }
+        }
+
         function toggleSession(id) {
             const body = document.getElementById(`body-${id}`);
             if (body) {
@@ -507,6 +619,38 @@
                 } else {
                     body.style.display = 'grid';
                 }
+            }
+        }
+
+        async function toggleSessionPublic(event, sessionId, btn) {
+            event.stopPropagation();
+            try {
+                const response = await authenticatedFetch(`/api/sessions/${sessionId}/public`, {
+                    method: 'PATCH'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    btn.style.color = data.public ? 'var(--accent-glow)' : 'var(--text-secondary)';
+                    // Reload to reflect changes in both sections
+                    window.location.reload();
+                }
+            } catch (e) {
+                console.warn("Toggle session public restricted:", e);
+            }
+        }
+
+        async function toggleImagePublic(event, filename, btn) {
+            event.stopPropagation();
+            try {
+                const response = await authenticatedFetch(`/api/image/${filename}/public`, {
+                    method: 'PATCH'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    btn.style.color = data.public ? 'var(--accent-glow)' : 'var(--text-secondary)';
+                }
+            } catch (e) {
+                console.warn("Toggle image public restricted:", e);
             }
         }
 
@@ -646,11 +790,16 @@
 
         // We collect all URLs into a flat array for the modal
         const imageUrls = [
-            {% for session in sessions %}
-        {% for image in session.images %}
-        "{{ image.url }}",
+            {% for session in public_sessions %}
+            {% for image in session.images %}
+            "{{ image.url }}",
             {% endfor %}
-        {% endfor %}
+            {% endfor %}
+            {% for session in private_sessions %}
+            {% for image in session.images %}
+            "{{ image.url }}",
+            {% endfor %}
+            {% endfor %}
         ];
         let currentImageIndex = 0;
 
