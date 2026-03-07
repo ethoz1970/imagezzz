@@ -191,7 +191,7 @@
                         <div style="position: relative; overflow: hidden; border-radius: 8px; display: block;" 
                              onmouseenter="this.querySelector('.img-actions').style.opacity=1" 
                              onmouseleave="this.querySelector('.img-actions').style.opacity=0">
-                            <img src="${img.url}" class="session-image-thumb" alt="${img.prompt}" title="${img.prompt}" style="display: block; width: 100%; height: auto;">
+                            <img src="${img.url}" class="session-image-thumb" alt="${img.original_prompt || img.prompt}" title="${img.original_prompt || img.prompt}" style="display: block; width: 100%; height: auto;">
                             <div class="img-actions" style="position: absolute; bottom: 8px; right: 8px; display: flex; gap: 0.5rem; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); padding: 0.4rem; border-radius: 8px; opacity: 0; transition: opacity 0.2s;">
                                 <a href="${img.url}" download="${img.filename}" class="action-btn" title="Download Image" style="border: none; background: transparent; padding: 0.2rem 0.6rem; box-shadow: none;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;">
@@ -264,13 +264,16 @@
             const trimmed = newName.trim();
             if (!trimmed) return;
 
+            const headers = { 'Content-Type': 'application/json' };
+            const adminToken = localStorage.getItem('admin_token');
+            if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
+
             try {
                 await fetch(`/api/sessions/${id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify({ name: trimmed })
                 });
-                // Unnecessary to trigger a full re-render on success since DOM is updated
             } catch (e) {
                 console.error("Failed to rename session", e);
                 fetchSessions(); // revert on fail

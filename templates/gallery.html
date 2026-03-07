@@ -323,11 +323,11 @@
                             <div class="gallery-item">
                                 <div class="gallery-image-container" onclick="openModal('{{ image.url }}')"
                                     style="cursor: pointer;">
-                                    <img src="{{ image.url }}" alt="Generated image for prompt: {{ image.prompt }}"
+                                    <img src="{{ image.url }}" alt="Generated image for prompt: {{ image.original_prompt or image.prompt }}"
                                         loading="lazy">
                                 </div>
                                 <div class="gallery-info">
-                                    <div class="gallery-prompt">{{ image.prompt }}</div>
+                                    <div class="gallery-prompt">{{ image.original_prompt or image.prompt }}</div>
                                     <div class="gallery-meta">
                                         <div class="meta-tag">
                                             <script>

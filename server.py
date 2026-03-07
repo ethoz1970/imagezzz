@@ -218,7 +218,7 @@ def generate():
         if not session_id or session_id not in sessions:
             session_id = str(uuid.uuid4())
             snip = prompt[:30] + ("..." if len(prompt) > 30 else "")
-            session_name = f"Session: {snip}"
+            session_name = snip
             sessions[session_id] = {
                 "id": session_id,
                 "name": session_name,
