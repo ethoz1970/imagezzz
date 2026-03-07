@@ -139,14 +139,25 @@
                     style="font-size: 0.45em; font-weight: 400; color: var(--text-secondary); letter-spacing: 1px; margin-top: 0.3rem;">|
                     Brain2Brush</span>
             </h1>
-            <div
-                style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
-                <a href="/" class="subtitle"
-                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Generate</a>
-                <a href="/sessions" class="subtitle"
-                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Sessions</a>
-                <a href="/gallery" class="subtitle"
-                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Gallery</a>
+            <div style="position: relative;">
+                <div
+                    style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                    <a href="/" class="subtitle"
+                        style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Generate</a>
+                    <a href="/sessions" class="subtitle"
+                        style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Sessions</a>
+                    <a href="/gallery" class="subtitle"
+                        style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Gallery</a>
+                </div>
+                <div id="generation-counter" class="hidden"
+                    style="position: absolute; right: 0; top: 1rem; background: rgba(0, 0, 0, 0.4); padding: 0.4rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border); display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="var(--accent-glow)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <span id="generations-left"
+                        style="font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 0.9rem;">5/5 Left</span>
+                </div>
             </div>
         </header>
 

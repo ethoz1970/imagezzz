@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template, Response
+from flask import Flask, request, jsonify, send_from_directory, render_template, Response, make_response
 import os
 import base64
 import json
@@ -7,6 +7,7 @@ import shutil
 from pipeline import enhance_prompt_with_ollama, generate_image_with_flux
 from flask_cors import CORS
 import time
+import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -31,13 +32,37 @@ def save_sessions(sessions_data):
     with open(SESSION_FILE, "w") as f:
         json.dump(sessions_data, f, indent=4)
 
+DAILY_LIMITS_FILE = os.path.join(OUTPUT_DIR, "daily_limits.json")
+DAILY_LIMIT = 5
+
+def load_daily_limits():
+    if not os.path.exists(DAILY_LIMITS_FILE):
+        return {}
+    try:
+        with open(DAILY_LIMITS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_daily_limits(limits_data):
+    with open(DAILY_LIMITS_FILE, "w") as f:
+        json.dump(limits_data, f, indent=4)
+
+def ensure_tracking_cookie(resp):
+    if not request.cookies.get("tracking_id"):
+        # Set cookie for 10 years
+        resp.set_cookie("tracking_id", str(uuid.uuid4()), max_age=60*60*24*365*10)
+    return resp
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    return ensure_tracking_cookie(resp)
 
 @app.route("/sessions")
 def sessions_page():
-    return render_template("sessions.html")
+    resp = make_response(render_template("sessions.html"))
+    return ensure_tracking_cookie(resp)
 
 @app.route("/gallery")
 def gallery():
@@ -97,7 +122,8 @@ def gallery():
     # Filter out empty sessions just for the gallery view
     session_list = [s for s in session_list if len(s.get('images', [])) > 0]
     
-    return render_template("gallery.html", sessions=session_list)
+    resp = make_response(render_template("gallery.html", sessions=session_list))
+    return ensure_tracking_cookie(resp)
 
 @app.route("/api/elaborate_prompt", methods=["POST"])
 def elaborate_prompt():
@@ -131,17 +157,40 @@ def generate():
         if not prompt:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
-        # Freemium Size Restriction Check
-        if size > 512:
-            admin_password = os.environ.get('ADMIN_PASSWORD')
-            if admin_password:
-                auth_header = request.headers.get('Authorization')
-                if not auth_header or not auth_header.startswith('Bearer '):
-                    return jsonify({"error": "Pro Access required for Medium and Large images."}), 403
-                
+        is_pro = False
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if admin_password:
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
                 token = auth_header.split(' ')[1]
-                if token != admin_password:
-                    return jsonify({"error": "Invalid Admin Token. Pro Access required."}), 403
+                if token == admin_password:
+                    is_pro = True
+
+        if not is_pro:
+            # Freemium Size Restriction Check
+            if size > 512:
+                return jsonify({"error": "Pro Access required for Medium and Large images."}), 403
+
+            # Daily Generation Limit Check
+            tracking_id = request.cookies.get("tracking_id")
+            if not tracking_id:
+                # Fallback to IP if cookie missing
+                tracking_id = request.remote_addr or "unknown_user"
+                
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            limits = load_daily_limits()
+            user_limit = limits.get(tracking_id, {"date": today, "count": 0})
+            
+            if user_limit.get("date") != today:
+                user_limit = {"date": today, "count": 0}
+                
+            if user_limit["count"] >= DAILY_LIMIT:
+                return jsonify({"error": f"You have reached your daily limit of {DAILY_LIMIT} images. Upgrade to Pro for unlimited generations."}), 429
+                
+            # If within limit, increment count
+            user_limit["count"] += 1
+            limits[tracking_id] = user_limit
+            save_daily_limits(limits)
 
         # Session tracking
         sessions = load_sessions()
@@ -367,6 +416,34 @@ def delete_session(session_id):
     del sessions[session_id]
     save_sessions(sessions)
     return jsonify({"success": True}), 200
+
+@app.route("/api/limits", methods=["GET"])
+def get_limits():
+    is_pro = False
+    admin_password = os.environ.get('ADMIN_PASSWORD')
+    if admin_password:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            if token == admin_password:
+                is_pro = True
+
+    if is_pro:
+        return jsonify({"is_pro": True, "remaining": "∞"})
+
+    tracking_id = request.cookies.get("tracking_id")
+    if not tracking_id:
+        tracking_id = request.remote_addr or "unknown_user"
+        
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    limits = load_daily_limits()
+    user_limit = limits.get(tracking_id, {"date": today, "count": 0})
+    
+    if user_limit.get("date") != today:
+        user_limit = {"date": today, "count": 0}
+        
+    remaining = max(0, DAILY_LIMIT - user_limit["count"])
+    return jsonify({"is_pro": False, "remaining": remaining, "total": DAILY_LIMIT})
 
 @app.route("/api/image/<filename>", methods=["DELETE"])
 @require_admin

@@ -30,9 +30,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const sessionHeaderContainer = document.getElementById('session-header-container');
     const currentSessionName = document.getElementById('current-session-name');
 
+    const generationCounter = document.getElementById('generation-counter');
+    const generationsLeftText = document.getElementById('generations-left');
+
     let currentPhase = 'initial'; // 'initial' or 'review'
     let activeReferenceImage = null;
     let currentSessionId = null;
+
+    // Fetch and display limits
+    const updateLimitsDisplay = async () => {
+        try {
+            const headers = {};
+            const adminToken = localStorage.getItem('admin_token');
+            if (adminToken) {
+                headers['Authorization'] = `Bearer ${adminToken}`;
+            }
+
+            const response = await fetch('/api/limits', { headers });
+            if (response.ok) {
+                const data = await response.json();
+                generationCounter.classList.remove('hidden');
+
+                if (data.is_pro) {
+                    generationsLeftText.textContent = "Pro User";
+                    generationsLeftText.style.color = "var(--accent-glow)";
+                } else {
+                    generationsLeftText.textContent = `${data.remaining}/${data.total} Left`;
+                    if (data.remaining === 0) {
+                        generationsLeftText.style.color = "#ff4444";
+                    } else {
+                        generationsLeftText.style.color = "white";
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch limits", e);
+        }
+    };
+
+    // Initial fetch
+    updateLimitsDisplay();
 
     // Dynamic loading text phases
 
@@ -343,6 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                 }
                                 displayResult(uiRefs, data.image_url, finalPrompt);
+                                updateLimitsDisplay(); // Update limits after generation
                                 shouldBreak = true;
                             } else if (data.status === 'error') {
                                 throw new Error(data.error);
@@ -597,9 +635,11 @@ document.addEventListener('keydown', (e) => {
         if (pwd) {
             localStorage.setItem('admin_token', pwd);
             alert("Admin token saved locally. Pro features unlocked.");
+            location.reload(); // Reload to update UI and Limits
         } else {
             localStorage.removeItem('admin_token');
             alert("Admin token cleared.");
+            location.reload();
         }
     }
 });
