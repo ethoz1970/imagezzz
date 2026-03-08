@@ -52,22 +52,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (generationCounter && generationsLeftText) {
                     generationCounter.classList.remove('hidden');
-                    if (data.is_pro) {
-                        generationsLeftText.textContent = "Pro User";
+                    clearInterval(countdownInterval);
+                    if (data.role === 'admin') {
+                        generationsLeftText.textContent = "Admin";
+                        generationsLeftText.style.color = "var(--accent-glow)";
+                    } else if (data.remaining === 0 && data.resets_at) {
+                        generationsLeftText.style.color = "#ff4444";
+                        startCountdown(data.resets_at, data.role === 'pro' ? 'Pro' : 'Free');
+                    } else if (data.role === 'pro') {
+                        generationsLeftText.textContent = `Pro: ${data.remaining}/${data.total} Left`;
                         generationsLeftText.style.color = "var(--accent-glow)";
                     } else {
-                        generationsLeftText.textContent = `${data.remaining}/${data.total} Left`;
-                        if (data.remaining === 0) {
-                            generationsLeftText.style.color = "#ff4444";
-                        } else {
-                            generationsLeftText.style.color = "white";
-                        }
+                        generationsLeftText.textContent = `Free: ${data.remaining}/${data.total} Left`;
+                        generationsLeftText.style.color = "white";
                     }
                 }
             }
         } catch (e) {
             console.error("Failed to fetch limits", e);
         }
+    };
+
+    let countdownInterval;
+
+    const startCountdown = (resetsAtEpoch, label) => {
+        const tick = () => {
+            const now = Date.now() / 1000;
+            const diff = Math.max(0, resetsAtEpoch - now);
+            if (diff <= 0) {
+                clearInterval(countdownInterval);
+                updateLimitsDisplay();
+                return;
+            }
+            const h = Math.floor(diff / 3600);
+            const m = Math.floor((diff % 3600) / 60);
+            const prefix = label ? `${label}: ` : '';
+            generationsLeftText.textContent = `${prefix}${h}h ${m}m`;
+            generationsLeftText.style.color = "#ff4444";
+        };
+        tick();
+        countdownInterval = setInterval(tick, 30000);
     };
 
     // Initial fetch
@@ -87,10 +111,25 @@ document.addEventListener('DOMContentLoaded', () => {
     let timerInterval;
     let startTime;
 
-    // Freemium Radio Listeners
+    // Freemium Radio Listeners — check role from limits API to allow pro users
+    let userRole = 'free';
+    const fetchUserRole = async () => {
+        try {
+            const headers = {};
+            const adminToken = localStorage.getItem('admin_token');
+            if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
+            const res = await fetch('/api/limits', { headers });
+            if (res.ok) {
+                const data = await res.json();
+                userRole = data.role || (data.is_pro ? 'pro' : 'free');
+            }
+        } catch (e) {}
+    };
+    fetchUserRole();
+
     freemiumRadios.forEach(radio => {
         radio.addEventListener('click', (e) => {
-            if (!localStorage.getItem('admin_token')) {
+            if (userRole === 'free') {
                 e.preventDefault();
                 window.openUpsellModal();
             }

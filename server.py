@@ -33,7 +33,10 @@ def save_sessions(sessions_data):
         json.dump(sessions_data, f, indent=4)
 
 DAILY_LIMITS_FILE = os.path.join(OUTPUT_DIR, "daily_limits.json")
-DAILY_LIMIT = 5
+FREE_LIMIT = 5
+PRO_LIMIT = 25
+LIMIT_WINDOW_HOURS = 8
+PRO_USERS_FILE = os.path.join(OUTPUT_DIR, "pro_users.json")
 
 def load_daily_limits():
     if not os.path.exists(DAILY_LIMITS_FILE):
@@ -47,6 +50,45 @@ def load_daily_limits():
 def save_daily_limits(limits_data):
     with open(DAILY_LIMITS_FILE, "w") as f:
         json.dump(limits_data, f, indent=4)
+
+def get_usage_in_window(tracking_id):
+    """Return (count, oldest_timestamp_or_None) of generations within the rolling window, pruning old entries."""
+    limits = load_daily_limits()
+    cutoff = time.time() - LIMIT_WINDOW_HOURS * 3600
+    timestamps = limits.get(tracking_id, [])
+    # Migrate from old format (dict with date/count) to new format (list of timestamps)
+    if isinstance(timestamps, dict):
+        timestamps = []
+    timestamps = sorted([t for t in timestamps if t > cutoff])
+    limits[tracking_id] = timestamps
+    save_daily_limits(limits)
+    oldest = timestamps[0] if timestamps else None
+    return len(timestamps), oldest
+
+def record_generation(tracking_id):
+    """Record a generation timestamp for the user."""
+    limits = load_daily_limits()
+    cutoff = time.time() - LIMIT_WINDOW_HOURS * 3600
+    timestamps = limits.get(tracking_id, [])
+    if isinstance(timestamps, dict):
+        timestamps = []
+    timestamps = [t for t in timestamps if t > cutoff]
+    timestamps.append(time.time())
+    limits[tracking_id] = timestamps
+    save_daily_limits(limits)
+
+def load_pro_users():
+    if not os.path.exists(PRO_USERS_FILE):
+        return {}
+    try:
+        with open(PRO_USERS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_pro_users(pro_users):
+    with open(PRO_USERS_FILE, "w") as f:
+        json.dump(pro_users, f, indent=4)
 
 def ensure_tracking_cookie(resp):
     if not request.cookies.get("tracking_id"):
@@ -64,6 +106,20 @@ def _check_admin():
                 return True
     return False
 
+def _check_pro():
+    tracking_id = request.cookies.get("tracking_id")
+    if not tracking_id:
+        return False
+    pro_users = load_pro_users()
+    return tracking_id in pro_users
+
+def _get_user_role():
+    if _check_admin():
+        return "admin"
+    if _check_pro():
+        return "pro"
+    return "free"
+
 @app.route("/")
 def index():
     resp = make_response(render_template("index.html"))
@@ -76,7 +132,7 @@ def sessions_page():
 
 @app.route("/gallery")
 def gallery():
-    is_pro = _check_admin()
+    role = _get_user_role()
 
     tracking_id = request.cookies.get("tracking_id")
     if not tracking_id:
@@ -85,7 +141,7 @@ def gallery():
     all_sessions = load_sessions()
 
     # Private sessions: user's own (or all for admin)
-    if is_pro:
+    if role == "admin":
         private_sessions = dict(all_sessions)
     else:
         private_sessions = {k: v for k, v in all_sessions.items() if v.get('tracking_id') == tracking_id}
@@ -127,10 +183,10 @@ def gallery():
                 }
 
                 # Add to private sessions (user's own)
-                is_owned = is_pro or meta.get('tracking_id') == tracking_id
+                is_owned = role == "admin" or meta.get('tracking_id') == tracking_id
                 if is_owned and sid and sid in private_sessions:
                     private_sessions[sid]['images'].append(image_data)
-                elif is_owned and is_pro and sid and sid not in private_sessions:
+                elif is_owned and role == "admin" and sid and sid not in private_sessions:
                     if "legacy" not in private_sessions:
                         private_sessions["legacy"] = {
                             "id": "legacy",
@@ -200,33 +256,28 @@ def generate():
         if not prompt:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
 
-        is_pro = _check_admin()
+        role = _get_user_role()
 
         tracking_id = request.cookies.get("tracking_id")
         if not tracking_id:
             tracking_id = request.remote_addr or "unknown_user"
 
-        if not is_pro:
-            # Freemium Size Restriction Check
+        if role == "free":
             if size > 512:
                 return jsonify({"error": "Pro Access required for Medium and Large images."}), 403
 
-            # Daily Generation Limit Check
-                
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
-            limits = load_daily_limits()
-            user_limit = limits.get(tracking_id, {"date": today, "count": 0})
-            
-            if user_limit.get("date") != today:
-                user_limit = {"date": today, "count": 0}
-                
-            if user_limit["count"] >= DAILY_LIMIT:
-                return jsonify({"error": f"You have reached your daily limit of {DAILY_LIMIT} images. Upgrade to Pro for unlimited generations."}), 429
-                
-            # If within limit, increment count
-            user_limit["count"] += 1
-            limits[tracking_id] = user_limit
-            save_daily_limits(limits)
+            usage, _ = get_usage_in_window(tracking_id)
+            if usage >= FREE_LIMIT:
+                return jsonify({"error": f"You have reached your limit of {FREE_LIMIT} images per {LIMIT_WINDOW_HOURS} hours. Upgrade to Pro for more generations."}), 429
+            record_generation(tracking_id)
+
+        elif role == "pro":
+            usage, _ = get_usage_in_window(tracking_id)
+            if usage >= PRO_LIMIT:
+                return jsonify({"error": f"You have reached your Pro limit of {PRO_LIMIT} images per {LIMIT_WINDOW_HOURS} hours."}), 429
+            record_generation(tracking_id)
+
+        # admin: no limits, no size restriction
 
         # Session tracking
         sessions = load_sessions()
@@ -376,7 +427,7 @@ def require_admin(f):
 # --- REST API For Sessions ---
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
-    is_pro = _check_admin()
+    role = _get_user_role()
 
     tracking_id = request.cookies.get("tracking_id")
     if not tracking_id:
@@ -385,7 +436,7 @@ def get_sessions():
     sessions = load_sessions()
 
     # Filter sessions for non-admin users
-    if not is_pro:
+    if role != "admin":
         sessions = {k: v for k, v in sessions.items() if v.get('tracking_id') == tracking_id}
 
     # Enrich sessions with their images
@@ -408,7 +459,7 @@ def get_sessions():
                         pass
 
                 # Check image ownership for non-admin users
-                if not is_pro and meta.get('tracking_id') != tracking_id:
+                if role != "admin" and meta.get('tracking_id') != tracking_id:
                     continue
 
                 sid = meta.get('session_id')
@@ -474,24 +525,30 @@ def delete_session(session_id):
 
 @app.route("/api/limits", methods=["GET"])
 def get_limits():
-    is_pro = _check_admin()
+    role = _get_user_role()
 
-    if is_pro:
-        return jsonify({"is_pro": True, "remaining": "∞"})
+    if role == "admin":
+        return jsonify({"role": "admin", "is_pro": True, "remaining": "∞"})
 
     tracking_id = request.cookies.get("tracking_id")
     if not tracking_id:
         tracking_id = request.remote_addr or "unknown_user"
-        
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    limits = load_daily_limits()
-    user_limit = limits.get(tracking_id, {"date": today, "count": 0})
-    
-    if user_limit.get("date") != today:
-        user_limit = {"date": today, "count": 0}
-        
-    remaining = max(0, DAILY_LIMIT - user_limit["count"])
-    return jsonify({"is_pro": False, "remaining": remaining, "total": DAILY_LIMIT})
+
+    usage, oldest = get_usage_in_window(tracking_id)
+    resets_at = (oldest + LIMIT_WINDOW_HOURS * 3600) if oldest else None
+
+    if role == "pro":
+        remaining = max(0, PRO_LIMIT - usage)
+        resp = {"role": "pro", "is_pro": True, "remaining": remaining, "total": PRO_LIMIT}
+        if remaining == 0 and resets_at:
+            resp["resets_at"] = resets_at
+        return jsonify(resp)
+
+    remaining = max(0, FREE_LIMIT - usage)
+    resp = {"role": "free", "is_pro": False, "remaining": remaining, "total": FREE_LIMIT}
+    if remaining == 0 and resets_at:
+        resp["resets_at"] = resets_at
+    return jsonify(resp)
 
 @app.route("/api/image/<filename>", methods=["DELETE"])
 @require_admin
@@ -559,7 +616,7 @@ def toggle_session_public(session_id):
     # Bulk-update all image metadata files in this session
     if os.path.exists(OUTPUT_DIR):
         for filename in os.listdir(OUTPUT_DIR):
-            if filename.endswith(".json") and filename != "sessions.json" and filename != "daily_limits.json":
+            if filename.endswith(".json") and filename not in ("sessions.json", "daily_limits.json", "pro_users.json"):
                 meta_path = os.path.join(OUTPUT_DIR, filename)
                 try:
                     with open(meta_path, 'r') as f:
@@ -572,6 +629,30 @@ def toggle_session_public(session_id):
                     pass
 
     return jsonify({"success": True, "public": new_public}), 200
+
+@app.route("/api/pro", methods=["GET"])
+@require_admin
+def list_pro_users():
+    pro_users = load_pro_users()
+    return jsonify({"pro_users": pro_users}), 200
+
+@app.route("/api/pro/<tracking_id>", methods=["POST"])
+@require_admin
+def grant_pro(tracking_id):
+    pro_users = load_pro_users()
+    pro_users[tracking_id] = {"granted_at": int(time.time())}
+    save_pro_users(pro_users)
+    return jsonify({"success": True, "tracking_id": tracking_id}), 200
+
+@app.route("/api/pro/<tracking_id>", methods=["DELETE"])
+@require_admin
+def revoke_pro(tracking_id):
+    pro_users = load_pro_users()
+    if tracking_id not in pro_users:
+        return jsonify({"error": "Tracking ID not found in pro users"}), 404
+    del pro_users[tracking_id]
+    save_pro_users(pro_users)
+    return jsonify({"success": True, "tracking_id": tracking_id}), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5075))

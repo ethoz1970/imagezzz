@@ -803,10 +803,6 @@
 
         function resumeSession(event, id) {
             event.stopPropagation();
-            if (!adminPassword) {
-                showUpsell();
-                return;
-            }
             window.location.href = `/?session_id=${id}`;
         }
 
