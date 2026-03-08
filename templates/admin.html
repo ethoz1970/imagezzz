@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symphony - Admin</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+            width: 100%;
+        }
+
+        .gallery-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: var(--transition-smooth);
+        }
+
+        .gallery-item:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-glow);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .gallery-image-container {
+            width: 100%;
+            aspect-ratio: 1;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .gallery-item:hover img {
+            transform: scale(1.05);
+        }
+
+        .gallery-info {
+            padding: 1rem;
+        }
+
+        .gallery-prompt {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .gallery-meta {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .meta-tag {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .tracking-tag {
+            font-size: 0.7rem;
+            color: var(--accent-glow);
+            opacity: 0.6;
+            font-family: monospace;
+            word-break: break-all;
+        }
+
+        /* Modal */
+        #image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #image-modal.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        #modal-content {
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #modal-image {
+            max-width: 100%;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            object-fit: contain;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            text-decoration: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .modal-close:hover {
+            opacity: 1;
+        }
+
+        .modal-nav {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-size: 2.5rem;
+            cursor: pointer;
+            text-decoration: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            user-select: none;
+            padding: 1rem;
+            z-index: 1001;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-nav:hover {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-prev { left: 1rem; }
+        .modal-next { right: 1rem; }
+    </style>
+</head>
+
+<body>
+    <div class="background-blob blob-1"></div>
+    <div class="background-blob blob-2"></div>
+
+    <main class="container" style="max-width: 1000px;">
+        <header>
+            <h1 class="glow-text" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+                Blacksky Labs
+                <span style="font-size: 0.45em; font-weight: 400; color: var(--text-secondary); letter-spacing: 1px; margin-top: 0.3rem;">| Admin</span>
+            </h1>
+            <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <a href="/" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Generate</a>
+                <a href="/gallery" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Gallery</a>
+                <a href="/admin" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Admin</a>
+            </div>
+        </header>
+
+        <section class="glass-panel" style="margin-bottom: 2rem;">
+            <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-glow);">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                All Activity ({{ all_sessions|length }} sessions)
+            </h2>
+
+            {% if all_sessions %}
+            <div class="gallery-accordion">
+                {% for session in all_sessions %}
+                <div class="session-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 1.5rem; overflow: hidden;">
+                    <div class="session-header" onclick="toggleSession('{{ session.id }}')" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; transition: background 0.2s;">
+                        <div class="session-title-area" style="display: flex; align-items: center; gap: 1rem;">
+                            {% if session.images and session.images|length > 0 %}
+                            <div style="width: 52px; height: 52px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                                <img src="{{ session.images[0].url }}" alt="Session thumbnail" style="width: 100%; height: 100%; object-fit: cover;">
+                            </div>
+                            {% endif %}
+                            <div>
+                                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin: 0;">{{ session.name }}</h3>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                    <script>document.write(new Date({{ session.created_at * 1000 }}).toLocaleString())</script>
+                                    &bull; {{ session.images|length }} images
+                                </div>
+                                <div class="tracking-tag" title="Tracking ID">{{ session.tracking_id | default('unknown') }}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="action-icon-btn delete" onclick="deleteSession(event, '{{ session.id }}')" title="Delete Session"
+                                style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.4rem; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="session-body" id="body-{{ session.id }}" style="display: none; padding: 1.5rem;">
+                        {% if session.images %}
+                        <div class="gallery-grid">
+                            {% for image in session.images %}
+                            <div class="gallery-item">
+                                <div class="gallery-image-container" onclick="openModal('{{ image.url }}')" style="cursor: pointer;">
+                                    <img src="{{ image.url }}" alt="Generated image" loading="lazy">
+                                </div>
+                                <div class="gallery-info">
+                                    <div class="gallery-prompt">{{ image.original_prompt or image.prompt }}</div>
+                                    <div class="gallery-meta">
+                                        <div class="meta-tag">
+                                            <script>document.write(new Date({{ image.timestamp * 1000 }}).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));</script>
+                                        </div>
+                                        {% if image.generation_time %}
+                                        <div class="meta-tag">{{ "%.1f"|format(image.generation_time) }}s</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="gallery-actions" style="display: flex; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                                        <a href="{{ image.url }}" download="{{ image.url.split('/')[-1] }}" class="action-btn" title="Download Image"
+                                            style="flex: 1; padding: 0.5rem; justify-content: center;" onclick="event.stopPropagation()">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                <polyline points="7 10 12 15 17 10"></polyline>
+                                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                                            </svg>
+                                            <span style="margin-left: 0.4rem; font-size: 0.85rem;">Download</span>
+                                        </a>
+                                        <button class="action-btn delete" onclick="deleteImage(event, '{{ image.url }}')" title="Delete Image"
+                                            style="flex: 1; padding: 0.5rem; justify-content: center; color: rgba(255, 50, 50, 0.8); border-color: rgba(255, 50, 50, 0.3);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                            <span style="margin-left: 0.4rem; font-size: 0.85rem;">Delete</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p style="color: var(--text-secondary);">No images in this session.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                <p>No sessions found.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <!-- Full Screen Image Modal -->
+    <div id="image-modal" onclick="closeModal()">
+        <span class="modal-nav modal-prev" onclick="event.stopPropagation(); navigateModal(-1)">&#9664;</span>
+        <span class="modal-nav modal-next" onclick="event.stopPropagation(); navigateModal(1)">&#9654;</span>
+        <div id="modal-content" onclick="event.stopPropagation()" style="position: relative;">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <img id="modal-image" src="" alt="Full screen image">
+            <div style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 0.5rem; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); padding: 0.5rem; border-radius: 8px;">
+                <a id="modal-download" href="#" download class="action-btn" title="Download Image"
+                    style="border: none; background: transparent; padding: 0.3rem 0.6rem; box-shadow: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </a>
+                <button id="modal-delete" class="action-btn delete" onclick="deleteCurrentImageFromModal()" title="Delete Image"
+                    style="border: none; background: transparent; padding: 0.3rem 0.6rem; box-shadow: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let adminPassword = localStorage.getItem('admin_token') || '';
+
+        async function authenticatedFetch(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            if (adminPassword) {
+                options.headers['Authorization'] = `Bearer ${adminPassword}`;
+            }
+            return fetch(url, options);
+        }
+
+        function toggleSession(id) {
+            const body = document.getElementById(`body-${id}`);
+            if (body) {
+                body.style.display = body.style.display === 'none' ? 'grid' : 'none';
+            }
+        }
+
+        async function deleteSession(event, id) {
+            event.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this session and all of its images?")) return;
+            try {
+                const response = await authenticatedFetch(`/api/sessions/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert("Failed to delete session.");
+                }
+            } catch (e) {
+                console.warn("Delete session failed:", e);
+            }
+        }
+
+        async function deleteImage(event, imageUrl) {
+            event.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this image?")) return;
+            const filename = imageUrl.split('/').pop();
+            try {
+                const response = await authenticatedFetch(`/api/image/${filename}`, { method: 'DELETE' });
+                if (response.ok) {
+                    const index = imageUrls.indexOf(imageUrl);
+                    if (index > -1) imageUrls.splice(index, 1);
+                    const imgElement = document.querySelector(`img[src="${imageUrl}"]`);
+                    if (imgElement) {
+                        const gridItem = imgElement.closest('.gallery-item');
+                        if (gridItem) gridItem.remove();
+                    }
+                }
+            } catch (e) {
+                console.warn("Delete image failed:", e);
+            }
+        }
+
+        async function deleteCurrentImageFromModal() {
+            if (imageUrls.length === 0) return;
+            const currentUrl = imageUrls[currentImageIndex];
+            if (!confirm("Are you sure you want to permanently delete this image?")) return;
+            const filename = currentUrl.split('/').pop();
+            try {
+                const response = await authenticatedFetch(`/api/image/${filename}`, { method: 'DELETE' });
+                if (response.ok) {
+                    const imgElement = document.querySelector(`img[src="${currentUrl}"]`);
+                    if (imgElement) {
+                        const gridItem = imgElement.closest('.gallery-item');
+                        if (gridItem) gridItem.remove();
+                    }
+                    imageUrls.splice(currentImageIndex, 1);
+                    if (imageUrls.length === 0) {
+                        closeModal();
+                    } else {
+                        if (currentImageIndex >= imageUrls.length) currentImageIndex = 0;
+                        const newSrc = imageUrls[currentImageIndex];
+                        modalImg.src = newSrc;
+                        modalDownload.href = newSrc;
+                        modalDownload.download = newSrc.split('/').pop();
+                    }
+                }
+            } catch (e) {
+                console.warn("Delete failed:", e);
+            }
+        }
+
+        const modal = document.getElementById('image-modal');
+        const modalImg = document.getElementById('modal-image');
+        const modalDownload = document.getElementById('modal-download');
+
+        const imageUrls = [
+            {% for session in all_sessions %}
+            {% for image in session.images %}
+            "{{ image.url }}",
+            {% endfor %}
+            {% endfor %}
+        ];
+        let currentImageIndex = 0;
+
+        function openModal(imageSrc) {
+            currentImageIndex = imageUrls.indexOf(imageSrc);
+            modalImg.src = imageSrc;
+            modalDownload.href = imageSrc;
+            modalDownload.download = imageSrc.split('/').pop();
+            modal.style.display = 'flex';
+            void modal.offsetWidth;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            setTimeout(() => { modal.style.display = 'none'; modalImg.src = ''; }, 300);
+            document.body.style.overflow = 'auto';
+        }
+
+        function navigateModal(direction) {
+            if (imageUrls.length === 0) return;
+            currentImageIndex += direction;
+            if (currentImageIndex < 0) currentImageIndex = imageUrls.length - 1;
+            if (currentImageIndex >= imageUrls.length) currentImageIndex = 0;
+            const newSrc = imageUrls[currentImageIndex];
+            modalImg.src = newSrc;
+            modalDownload.href = newSrc;
+            modalDownload.download = newSrc.split('/').pop();
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (modal.classList.contains('active')) {
+                if (event.key === "Escape") closeModal();
+                else if (event.key === "ArrowLeft") navigateModal(-1);
+                else if (event.key === "ArrowRight") navigateModal(1);
+            }
+        });
+    </script>
+</body>
+
+</html>

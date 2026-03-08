@@ -658,6 +658,62 @@ def revoke_pro(tracking_id):
     save_pro_users(pro_users)
     return jsonify({"success": True, "tracking_id": tracking_id}), 200
 
+@app.route("/admin")
+def admin_panel():
+    if not _check_admin():
+        return "Forbidden", 403
+
+    all_sessions = load_sessions()
+
+    # Enrich sessions with their images
+    for sid in all_sessions.keys():
+        all_sessions[sid]['images'] = []
+
+    if os.path.exists(OUTPUT_DIR):
+        for filename in sorted(os.listdir(OUTPUT_DIR), reverse=True):
+            if filename.endswith(".png"):
+                image_path = os.path.join(OUTPUT_DIR, filename)
+                metadata_path = image_path.replace('.png', '.json')
+
+                meta = {}
+                if os.path.exists(metadata_path):
+                    try:
+                        with open(metadata_path, 'r') as f:
+                            meta = json.load(f)
+                    except Exception:
+                        pass
+
+                sid = meta.get('session_id')
+                image_data = {
+                    'filename': filename,
+                    'url': f"/static/outputs/{filename}",
+                    'prompt': meta.get('prompt', 'N/A'),
+                    'original_prompt': meta.get('original_prompt', ''),
+                    'generation_time': meta.get('generation_time', None),
+                    'timestamp': meta.get('timestamp', os.path.getctime(image_path)),
+                    'is_public': meta.get('public', False)
+                }
+
+                if sid and sid in all_sessions:
+                    all_sessions[sid]['images'].append(image_data)
+                else:
+                    if "legacy" not in all_sessions:
+                        all_sessions["legacy"] = {
+                            "id": "legacy",
+                            "name": "Legacy Images",
+                            "created_at": 0,
+                            "tracking_id": "unknown",
+                            "images": []
+                        }
+                    all_sessions["legacy"]['images'].append(image_data)
+
+    session_list = list(all_sessions.values())
+    session_list.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+    session_list = [s for s in session_list if len(s.get('images', [])) > 0]
+
+    resp = make_response(render_template("admin.html", all_sessions=session_list))
+    return ensure_tracking_cookie(resp)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5075))
     app.run(host="0.0.0.0", port=port, debug=True)

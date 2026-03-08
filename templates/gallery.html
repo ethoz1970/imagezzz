@@ -269,6 +269,8 @@
                     style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Sessions</a> -->
                 <a href="/gallery" class="subtitle"
                     style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Gallery</a>
+                <a href="/admin" class="subtitle admin-nav-link"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; display: none;">Admin</a>
             </div>
         </header>
 
@@ -283,9 +285,9 @@
                     </svg>
                     Public Gallery
                 </h2>
-                <span id="public-section-arrow" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.3s;">&#9660;</span>
+                <span id="public-section-arrow" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.3s;{% if private_sessions %} transform: rotate(-90deg);{% endif %}">&#9660;</span>
             </div>
-            <div id="public-section">
+            <div id="public-section"{% if private_sessions %} style="display: none;"{% endif %}>
                 {% if public_sessions %}
                 <div class="gallery-accordion">
                     {% for session in public_sessions %}
@@ -353,9 +355,9 @@
                     </svg>
                     My Images
                 </h2>
-                <span id="private-section-arrow" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.3s; transform: rotate(-90deg);">&#9660;</span>
+                <span id="private-section-arrow" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.3s;">&#9660;</span>
             </div>
-            <div id="private-section" style="display: none;">
+            <div id="private-section">
             {% if private_sessions %}
             <div class="gallery-accordion">
                 {% for session in private_sessions %}
@@ -581,6 +583,11 @@
     </div>
 
     <script>
+        // Show admin nav link if token exists
+        if (localStorage.getItem('admin_token')) {
+            document.querySelectorAll('.admin-nav-link').forEach(el => el.style.display = '');
+        }
+
         // Secret Admin Authentication
         let adminPassword = localStorage.getItem('admin_token') || '';
 

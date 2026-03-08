@@ -148,6 +148,8 @@
                         style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Sessions</a> -->
                     <a href="/gallery" class="subtitle"
                         style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Gallery</a>
+                    <a href="/admin" class="subtitle admin-nav-link"
+                        style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; display: none;">Admin</a>
                 </div>
                 <div id="generation-counter" class="hidden"
                     style="position: absolute; right: 0; top: 1rem; background: rgba(0, 0, 0, 0.4); padding: 0.4rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border); display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease;">
@@ -309,6 +311,11 @@
         </div>
     </div>
 
+    <script>
+        if (localStorage.getItem('admin_token')) {
+            document.querySelectorAll('.admin-nav-link').forEach(el => el.style.display = '');
+        }
+    </script>
     <script src="/static/app.js?v=2"></script>
 </body>
 
