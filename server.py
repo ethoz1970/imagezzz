@@ -104,6 +104,10 @@ def _check_admin():
             token = auth_header.split(' ')[1]
             if token == admin_password:
                 return True
+        # Also check query parameter (for browser page navigations)
+        token = request.args.get('token')
+        if token and token == admin_password:
+            return True
     return False
 
 def _check_pro():

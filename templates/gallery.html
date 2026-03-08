@@ -585,7 +585,10 @@
     <script>
         // Show admin nav link if token exists
         if (localStorage.getItem('admin_token')) {
-            document.querySelectorAll('.admin-nav-link').forEach(el => el.style.display = '');
+            document.querySelectorAll('.admin-nav-link').forEach(el => {
+                el.style.display = '';
+                el.href = '/admin?token=' + encodeURIComponent(localStorage.getItem('admin_token'));
+            });
         }
 
         // Secret Admin Authentication
