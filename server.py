@@ -480,17 +480,21 @@ def get_sessions():
     return jsonify({"sessions": session_list}), 200
 
 @app.route("/api/sessions/<session_id>", methods=["PUT"])
-@require_admin
 def rename_session(session_id):
     data = request.get_json() or {}
     new_name = data.get("name")
     if not new_name:
         return jsonify({"error": "Missing 'name'"}), 400
-        
+
     sessions = load_sessions()
     if session_id not in sessions:
         return jsonify({"error": "Session not found"}), 404
-        
+
+    # Check ownership or admin
+    tracking_id = request.cookies.get("tracking_id") or request.remote_addr or "unknown_user"
+    if not _check_admin() and sessions[session_id].get('tracking_id') != tracking_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
     sessions[session_id]["name"] = new_name
     save_sessions(sessions)
     return jsonify({"success": True, "session": sessions[session_id]}), 200

@@ -685,15 +685,19 @@
             if (!trimmed) return;
 
             try {
-                await authenticatedFetch(`/api/sessions/${id}`, {
+                const headers = { 'Content-Type': 'application/json' };
+                if (adminPassword) headers['Authorization'] = `Bearer ${adminPassword}`;
+                const res = await fetch(`/api/sessions/${id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({ name: trimmed })
                 });
+                if (!res.ok) {
+                    console.warn("Rename failed:", res.status);
+                    window.location.reload();
+                }
             } catch (e) {
-                console.warn("Rename restricted:", e);
-                // The API call blocked it due to lack of admin pass, and showUpsell() was automatically called
-                // Revert visual change locally
+                console.warn("Rename failed:", e);
                 window.location.reload();
             }
         }
