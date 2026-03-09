@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('generate-form');
     const promptInput = document.getElementById('prompt-input');
     const skipBrainToggle = document.getElementById('skip-brain');
+    const diversityToggle = document.getElementById('diversity-toggle');
     const sizeRadios = document.querySelectorAll('input[name="size"]');
     const freemiumRadios = document.querySelectorAll('.freemium-restricted');
 
@@ -165,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const setFormState = (isLoading) => {
         promptInput.disabled = isLoading;
         skipBrainToggle.disabled = isLoading;
+        diversityToggle.disabled = isLoading;
         sizeRadios.forEach(radio => radio.disabled = isLoading);
         generateBtn.disabled = isLoading;
         rerollBtn.disabled = isLoading;
@@ -383,7 +385,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     size: parseInt(selectedSize) || 768,
                     reference_image: activeReferenceImage,
                     image_strength: parseFloat(imageStrengthSlider.value),
-                    session_id: currentSessionId
+                    session_id: currentSessionId,
+                    diversity: diversityToggle.checked
                 })
             });
 

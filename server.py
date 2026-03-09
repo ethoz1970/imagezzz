@@ -294,6 +294,7 @@ def generate():
         reference_image = data.get("reference_image")
         image_strength = float(data.get("image_strength", 0.4))
         session_id = data.get("session_id")
+        diversity = data.get("diversity", False)
 
         if not prompt:
             return jsonify({"error": "Missing 'prompt' in request body"}), 400
@@ -392,8 +393,13 @@ def generate():
                             clean_rel_path = reference_image.lstrip('/')
                             init_image_path = os.path.join(os.path.dirname(__file__), clean_rel_path)
 
+                        # Inject diversity instruction if enabled
+                        gen_prompt = final_prompt
+                        if diversity:
+                            gen_prompt += " For any people depicted, randomly assign ethnicity with equal probability: 25% East Asian, 25% Black/African, 25% Latin/Hispanic, 25% White/European. Reflect this naturally in skin tone, features, and styling."
+
                         generate_image_with_flux(
-                            prompt=final_prompt, 
+                            prompt=gen_prompt,
                             output_path=output_path, 
                             size=size, 
                             init_image_path=init_image_path,
@@ -411,7 +417,8 @@ def generate():
                             "generation_time": generation_time,
                             "session_id": session_id,
                             "tracking_id": tracking_id,
-                            "public": False
+                            "public": False,
+                            "diversity": diversity
                         }
                         meta_filename = filename.replace('.png', '.json')
                         with open(os.path.join(OUTPUT_DIR, meta_filename), 'w') as f:
