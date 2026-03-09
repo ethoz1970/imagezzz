@@ -271,6 +271,8 @@
                     style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Gallery</a>
                 <a href="/admin" class="subtitle admin-nav-link"
                     style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; display: none;">Admin</a>
+                <a href="/login" id="auth-nav-link" class="subtitle"
+                    style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; display: none;">Sign In</a>
             </div>
         </header>
 
@@ -564,21 +566,22 @@
         </div>
     </div>
 
-    <!-- Freemium Upsell Modal -->
+    <!-- Upsell Modal -->
     <div id="upsell-modal" onclick="closeUpsellModal()">
         <div class="upsell-content" onclick="event.stopPropagation()">
             <span class="upsell-close" onclick="closeUpsellModal()">&times;</span>
-            <div class="pro-badge">Pro Feature</div>
-            <h2 style="font-family: 'Outfit', sans-serif; font-size: 2rem; margin-bottom: 1rem;">Unlock Session
-                Management</h2>
+            <div class="pro-badge">Tokens Required</div>
+            <h2 style="font-family: 'Outfit', sans-serif; font-size: 2rem; margin-bottom: 1rem;">Unlock Full Features</h2>
             <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 2rem; font-size: 1.1rem;">
-                Upgrade to Blacksky Labs Pro to save your generation history, curate galleries, and seamlessly resume
-                past sessions. Don't lose your masterpieces!
+                Create an account and get tokens to manage sessions, delete images, and access all features.
             </p>
-            <a href="mailto:info@blackskymedia.org?subject=Pro%20Access%20Request" class="primary-btn"
+            <a href="/register" class="primary-btn"
                 style="text-decoration: none; padding: 1rem 2rem; font-size: 1.1rem; display: inline-block; width: 100%; box-sizing: border-box; margin-bottom: 1rem;">
-                Contact Us for Pro Access
+                Create Account
             </a>
+            <p style="text-align: center;">
+                <a href="/login" style="color: var(--accent-glow); text-decoration: none; font-size: 0.9rem;">Already have an account? Sign in</a>
+            </p>
         </div>
     </div>
 
@@ -590,6 +593,29 @@
                 el.href = '/admin?token=' + encodeURIComponent(localStorage.getItem('admin_token'));
             });
         }
+        // Auth nav
+        (async () => {
+            try {
+                const res = await fetch('/api/auth/me');
+                const data = await res.json();
+                const link = document.getElementById('auth-nav-link');
+                if (link) {
+                    if (data.authenticated) {
+                        link.textContent = data.user.display_name;
+                        link.href = '#';
+                        link.title = data.user.email + ' | ' + data.user.token_balance + ' tokens';
+                        link.onclick = async (e) => {
+                            e.preventDefault();
+                            if (confirm('Sign out?')) {
+                                await fetch('/api/auth/logout', { method: 'POST' });
+                                location.reload();
+                            }
+                        };
+                    }
+                    link.style.display = '';
+                }
+            } catch (e) {}
+        })();
 
         // Secret Admin Authentication
         let adminPassword = localStorage.getItem('admin_token') || '';

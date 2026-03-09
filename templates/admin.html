@@ -195,9 +195,28 @@
                 <a href="/" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Generate</a>
                 <a href="/gallery" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Gallery</a>
                 <a href="/admin" class="subtitle admin-nav-link" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; color: var(--accent-glow); font-weight: 600;">Admin</a>
+                <a href="/login" id="auth-nav-link" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease; display: none;">Sign In</a>
             </div>
         </header>
 
+        <!-- User Management Section -->
+        <section class="glass-panel" style="margin-bottom: 2rem;">
+            <div onclick="toggleUserPanel()" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1rem;">
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-glow);">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    Registered Users
+                </h2>
+                <span id="users-panel-arrow" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.3s;">&#9660;</span>
+            </div>
+            <div id="users-panel">
+                <div id="users-list" style="font-size: 0.9rem;">Loading users...</div>
+            </div>
+        </section>
+
+        <!-- All Activity Section -->
         <section class="glass-panel" style="margin-bottom: 2rem;">
             <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-glow);">
@@ -332,6 +351,29 @@
                 el.href = '/admin?token=' + encodeURIComponent(adminPassword);
             });
         }
+        // Auth nav
+        (async () => {
+            try {
+                const res = await fetch('/api/auth/me');
+                const data = await res.json();
+                const link = document.getElementById('auth-nav-link');
+                if (link) {
+                    if (data.authenticated) {
+                        link.textContent = data.user.display_name;
+                        link.href = '#';
+                        link.title = data.user.email + ' | ' + data.user.token_balance + ' tokens';
+                        link.onclick = async (e) => {
+                            e.preventDefault();
+                            if (confirm('Sign out?')) {
+                                await fetch('/api/auth/logout', { method: 'POST' });
+                                location.reload();
+                            }
+                        };
+                    }
+                    link.style.display = '';
+                }
+            } catch (e) {}
+        })();
 
         async function authenticatedFetch(url, options = {}) {
             if (!options.headers) options.headers = {};
@@ -340,6 +382,91 @@
             }
             return fetch(url, options);
         }
+
+        // --- User Management ---
+        function toggleUserPanel() {
+            const panel = document.getElementById('users-panel');
+            const arrow = document.getElementById('users-panel-arrow');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                arrow.style.transform = 'rotate(0deg)';
+            } else {
+                panel.style.display = 'none';
+                arrow.style.transform = 'rotate(-90deg)';
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const res = await authenticatedFetch('/api/admin/users');
+                if (!res.ok) { document.getElementById('users-list').textContent = 'Failed to load users.'; return; }
+                const data = await res.json();
+                const container = document.getElementById('users-list');
+
+                if (!data.users || data.users.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-secondary);">No registered users yet.</p>';
+                    return;
+                }
+
+                let html = '<table style="width: 100%; border-collapse: collapse;">';
+                html += '<thead><tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left;">';
+                html += '<th style="padding: 0.5rem;">User</th>';
+                html += '<th style="padding: 0.5rem;">Role</th>';
+                html += '<th style="padding: 0.5rem;">Tokens</th>';
+                html += '<th style="padding: 0.5rem;">Joined</th>';
+                html += '<th style="padding: 0.5rem;">Actions</th>';
+                html += '</tr></thead><tbody>';
+
+                data.users.forEach(u => {
+                    const name = u.display_name || u.email.split('@')[0];
+                    const joined = new Date(u.created_at * 1000).toLocaleDateString();
+                    const roleBadge = u.role === 'admin'
+                        ? '<span style="color: var(--accent-glow); font-weight: 600;">admin</span>'
+                        : '<span style="color: var(--text-secondary);">free</span>';
+
+                    html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+                    html += `<td style="padding: 0.6rem 0.5rem;"><div style="font-weight: 500;">${name}</div><div style="font-size: 0.75rem; color: var(--text-secondary);">${u.email}</div></td>`;
+                    html += `<td style="padding: 0.6rem 0.5rem;">${roleBadge}</td>`;
+                    html += `<td style="padding: 0.6rem 0.5rem; font-weight: 600; color: ${u.token_balance > 0 ? 'var(--accent-glow)' : 'var(--text-secondary)'};">${u.token_balance}</td>`;
+                    html += `<td style="padding: 0.6rem 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">${joined}</td>`;
+                    html += `<td style="padding: 0.6rem 0.5rem;">`;
+                    html += `<button onclick="grantTokens('${u.id}', '${name}')" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: var(--accent-glow); padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; margin-right: 0.25rem;">+ Tokens</button>`;
+                    html += `</td></tr>`;
+                });
+
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (e) {
+                document.getElementById('users-list').textContent = 'Error loading users.';
+            }
+        }
+
+        async function grantTokens(userId, name) {
+            const input = prompt(`How many tokens to grant to ${name}?`);
+            if (!input) return;
+            const amount = parseInt(input);
+            if (isNaN(amount) || amount < 1) { alert('Enter a positive number.'); return; }
+
+            try {
+                const res = await authenticatedFetch(`/api/admin/tokens/${userId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminPassword}` },
+                    body: JSON.stringify({ amount })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`Granted ${amount} tokens to ${name}. New balance: ${data.new_balance}`);
+                    loadUsers();
+                } else {
+                    alert(data.error || 'Failed to grant tokens.');
+                }
+            } catch (e) {
+                alert('Error granting tokens.');
+            }
+        }
+
+        // Load users on page load
+        loadUsers();
 
         function toggleSession(id) {
             const body = document.getElementById(`body-${id}`);

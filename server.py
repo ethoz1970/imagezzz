@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template, Response, make_response
+from flask import Flask, request, jsonify, send_from_directory, render_template, Response, make_response, redirect, url_for
 import os
 import base64
 import json
@@ -6,11 +6,40 @@ import uuid
 import shutil
 from pipeline import enhance_prompt_with_ollama, generate_image_with_flux
 from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+from werkzeug.security import generate_password_hash, check_password_hash
 import time
 import datetime
+import db as appdb
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(32).hex())
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app)
+
+# Initialize database
+appdb.init_db()
+
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+class User(UserMixin):
+    def __init__(self, user_data):
+        self.id = user_data['id']
+        self.email = user_data['email']
+        self.display_name = user_data.get('display_name') or user_data['email'].split('@')[0]
+        self.role = user_data.get('role', 'free')
+        self.token_balance = user_data.get('token_balance', 0)
+        self.tracking_id = user_data.get('tracking_id')
+
+@login_manager.user_loader
+def load_user(user_id):
+    user_data = appdb.get_user_by_id(user_id)
+    if user_data:
+        return User(user_data)
+    return None
 
 # Ensure output and upload directories exist
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "static", "outputs")
@@ -37,6 +66,9 @@ FREE_LIMIT = 5
 PRO_LIMIT = 25
 LIMIT_WINDOW_HOURS = 8
 PRO_USERS_FILE = os.path.join(OUTPUT_DIR, "pro_users.json")
+
+# Token costs per generation by image size
+TOKEN_COSTS = {512: 1, 768: 2, 1024: 3}
 
 def load_daily_limits():
     if not os.path.exists(DAILY_LIMITS_FILE):
@@ -97,6 +129,9 @@ def ensure_tracking_cookie(resp):
     return resp
 
 def _check_admin():
+    # Check logged-in user role
+    if current_user.is_authenticated and current_user.role == 'admin':
+        return True
     admin_password = os.environ.get('ADMIN_PASSWORD')
     if admin_password:
         auth_header = request.headers.get('Authorization')
@@ -120,6 +155,9 @@ def _check_pro():
 def _get_user_role():
     if _check_admin():
         return "admin"
+    # Logged-in user with tokens gets "tokens" role (no rate limit)
+    if current_user.is_authenticated and current_user.token_balance > 0:
+        return "tokens"
     if _check_pro():
         return "pro"
     return "free"
@@ -266,13 +304,21 @@ def generate():
         if not tracking_id:
             tracking_id = request.remote_addr or "unknown_user"
 
-        if role == "free":
+        if role == "tokens":
+            # Logged-in user with token balance — deduct tokens, no rate limit
+            cost = TOKEN_COSTS.get(size, 1)
+            try:
+                appdb.deduct_tokens(current_user.id, cost, "generation", f"{size}px image")
+            except appdb.InsufficientTokens:
+                return jsonify({"error": f"Not enough tokens. This image costs {cost} token(s). Buy more tokens to continue."}), 402
+
+        elif role == "free":
             if size > 512:
-                return jsonify({"error": "Pro Access required for Medium and Large images."}), 403
+                return jsonify({"error": "Tokens required for Medium and Large images. Sign in and get tokens!"}), 403
 
             usage, _ = get_usage_in_window(tracking_id)
             if usage >= FREE_LIMIT:
-                return jsonify({"error": f"You have reached your limit of {FREE_LIMIT} images per {LIMIT_WINDOW_HOURS} hours. Upgrade to Pro for more generations."}), 429
+                return jsonify({"error": f"You have reached your limit of {FREE_LIMIT} images per {LIMIT_WINDOW_HOURS} hours. Sign in and get tokens for unlimited generations!"}), 429
             record_generation(tracking_id)
 
         elif role == "pro":
@@ -538,6 +584,16 @@ def get_limits():
     if role == "admin":
         return jsonify({"role": "admin", "is_pro": True, "remaining": "∞"})
 
+    if role == "tokens":
+        balance = appdb.get_token_balance(current_user.id)
+        return jsonify({
+            "role": "tokens",
+            "is_pro": True,
+            "token_balance": balance,
+            "remaining": balance,
+            "token_costs": TOKEN_COSTS
+        })
+
     tracking_id = request.cookies.get("tracking_id")
     if not tracking_id:
         tracking_id = request.remote_addr or "unknown_user"
@@ -661,6 +717,151 @@ def revoke_pro(tracking_id):
     del pro_users[tracking_id]
     save_pro_users(pro_users)
     return jsonify({"success": True, "tracking_id": tracking_id}), 200
+
+# --- Admin Token & User Management ---
+@app.route("/api/admin/users", methods=["GET"])
+@require_admin
+def admin_list_users():
+    users = appdb.get_all_users()
+    return jsonify({"users": users}), 200
+
+@app.route("/api/admin/tokens/<user_id>", methods=["POST"])
+@require_admin
+def admin_grant_tokens(user_id):
+    data = request.get_json() or {}
+    amount = data.get("amount")
+    if not amount or not isinstance(amount, int) or amount < 1:
+        return jsonify({"error": "amount must be a positive integer"}), 400
+
+    user = appdb.get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    new_balance = appdb.credit_tokens(user_id, amount, "admin_grant", description=f"Granted by admin")
+    return jsonify({"success": True, "user_id": user_id, "amount": amount, "new_balance": new_balance}), 200
+
+@app.route("/api/admin/role/<user_id>", methods=["PATCH"])
+@require_admin
+def admin_set_role(user_id):
+    data = request.get_json() or {}
+    role = data.get("role")
+    if role not in ("free", "admin"):
+        return jsonify({"error": "role must be 'free' or 'admin'"}), 400
+
+    user = appdb.get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    appdb.set_user_role(user_id, role)
+    return jsonify({"success": True, "user_id": user_id, "role": role}), 200
+
+# --- Auth Routes ---
+@app.route("/login")
+def login_page():
+    if current_user.is_authenticated:
+        return redirect("/")
+    resp = make_response(render_template("login.html"))
+    return ensure_tracking_cookie(resp)
+
+@app.route("/register")
+def register_page():
+    if current_user.is_authenticated:
+        return redirect("/")
+    resp = make_response(render_template("register.html"))
+    return ensure_tracking_cookie(resp)
+
+@app.route("/api/auth/register", methods=["POST"])
+def auth_register():
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    display_name = (data.get("display_name") or "").strip()
+
+    if not email or "@" not in email:
+        return jsonify({"error": "Valid email is required"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+    # Check if email already exists
+    existing = appdb.get_user_by_email(email)
+    if existing:
+        return jsonify({"error": "An account with this email already exists"}), 409
+
+    tracking_id = request.cookies.get("tracking_id")
+    password_hash = generate_password_hash(password)
+    user_id = appdb.create_user(email, password_hash, display_name or None, tracking_id)
+
+    # Claim anonymous data
+    if tracking_id:
+        appdb.claim_anonymous_data(user_id, tracking_id)
+
+    # Log them in
+    user_data = appdb.get_user_by_id(user_id)
+    login_user(User(user_data), remember=True)
+
+    return jsonify({
+        "success": True,
+        "user": {
+            "id": user_id,
+            "email": email,
+            "display_name": display_name or email.split("@")[0],
+            "role": "free",
+            "token_balance": 0
+        }
+    }), 201
+
+@app.route("/api/auth/login", methods=["POST"])
+def auth_login():
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    user_data = appdb.get_user_by_email(email)
+    if not user_data or not check_password_hash(user_data["password_hash"], password):
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    # Claim anonymous data from current tracking_id
+    tracking_id = request.cookies.get("tracking_id")
+    if tracking_id:
+        appdb.claim_anonymous_data(user_data["id"], tracking_id)
+
+    appdb.update_last_login(user_data["id"])
+    login_user(User(user_data), remember=True)
+
+    return jsonify({
+        "success": True,
+        "user": {
+            "id": user_data["id"],
+            "email": user_data["email"],
+            "display_name": user_data.get("display_name") or user_data["email"].split("@")[0],
+            "role": user_data.get("role", "free"),
+            "token_balance": user_data.get("token_balance", 0)
+        }
+    }), 200
+
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    logout_user()
+    return jsonify({"success": True}), 200
+
+@app.route("/api/auth/me", methods=["GET"])
+def auth_me():
+    if not current_user.is_authenticated:
+        return jsonify({"authenticated": False}), 200
+
+    return jsonify({
+        "authenticated": True,
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "display_name": current_user.display_name,
+            "role": current_user.role,
+            "token_balance": current_user.token_balance
+        }
+    }), 200
 
 @app.route("/admin")
 def admin_panel():

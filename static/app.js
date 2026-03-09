@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (data.role === 'admin') {
                         generationsLeftText.textContent = "Admin";
                         generationsLeftText.style.color = "var(--accent-glow)";
+                    } else if (data.role === 'tokens') {
+                        generationsLeftText.textContent = `${data.token_balance} tokens`;
+                        generationsLeftText.style.color = data.token_balance > 0 ? "var(--accent-glow)" : "#ff4444";
                     } else if (data.remaining === 0 && data.resets_at) {
                         generationsLeftText.style.color = "#ff4444";
                         startCountdown(data.resets_at, data.role === 'pro' ? 'Pro' : 'Free');
@@ -122,6 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 const data = await res.json();
                 userRole = data.role || (data.is_pro ? 'pro' : 'free');
+                // tokens role has pro-level access to all sizes
+                if (userRole === 'tokens') userRole = 'pro';
             }
         } catch (e) {}
     };

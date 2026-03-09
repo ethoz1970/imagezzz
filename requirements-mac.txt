@@ -4,3 +4,5 @@ requests
 Flask
 flask-cors
 Pillow
+flask-login
+stripe

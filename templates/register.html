@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symphony - Create Account</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        .auth-panel {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+        .auth-input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s;
+        }
+        .auth-input:focus {
+            outline: none;
+            border-color: var(--accent-glow);
+        }
+        .auth-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+        .auth-label {
+            display: block;
+            margin-bottom: 0.4rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .auth-field {
+            margin-bottom: 1.25rem;
+        }
+        .auth-error {
+            color: #ef4444;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        .auth-link {
+            color: var(--accent-glow);
+            text-decoration: none;
+        }
+        .auth-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="background-blob blob-1"></div>
+    <div class="background-blob blob-2"></div>
+
+    <main class="container">
+        <header>
+            <h1 class="glow-text" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+                Blacksky Labs
+                <span style="font-size: 0.45em; font-weight: 400; color: var(--text-secondary); letter-spacing: 1px; margin-top: 0.3rem;">| Create Account</span>
+            </h1>
+            <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <a href="/" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Generate</a>
+                <a href="/gallery" class="subtitle" style="text-decoration: none; cursor: pointer; transition: all 0.3s ease;">Gallery</a>
+            </div>
+        </header>
+
+        <section class="glass-panel auth-panel">
+            <h2 style="font-family: 'Outfit', sans-serif; text-align: center; margin-bottom: 1.5rem; font-size: 1.4rem;">Create Your Account</h2>
+
+            <div id="auth-error" class="auth-error"></div>
+
+            <form id="register-form">
+                <div class="auth-field">
+                    <label class="auth-label" for="display_name">Display Name <span style="opacity: 0.5;">(optional)</span></label>
+                    <input type="text" id="display_name" class="auth-input" placeholder="Your name" autocomplete="name">
+                </div>
+                <div class="auth-field">
+                    <label class="auth-label" for="email">Email</label>
+                    <input type="email" id="email" class="auth-input" placeholder="you@example.com" required autocomplete="email">
+                </div>
+                <div class="auth-field">
+                    <label class="auth-label" for="password">Password</label>
+                    <input type="password" id="password" class="auth-input" placeholder="At least 6 characters" required minlength="6" autocomplete="new-password">
+                </div>
+                <div class="auth-field">
+                    <label class="auth-label" for="password_confirm">Confirm Password</label>
+                    <input type="password" id="password_confirm" class="auth-input" placeholder="Confirm your password" required minlength="6" autocomplete="new-password">
+                </div>
+                <button type="submit" id="register-btn" class="primary-btn" style="width: 100%; margin-top: 0.5rem;">
+                    <span class="btn-text">Create Account</span>
+                    <span class="btn-loader hidden"></span>
+                </button>
+            </form>
+
+            <p style="text-align: center; margin-top: 1.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                Already have an account? <a href="/login" class="auth-link">Sign in</a>
+            </p>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById('register-form');
+        const errorDiv = document.getElementById('auth-error');
+        const btn = document.getElementById('register-btn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorDiv.style.display = 'none';
+
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('password_confirm').value;
+
+            if (password !== confirm) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.querySelector('.btn-text').textContent = 'Creating account...';
+
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('email').value,
+                        display_name: document.getElementById('display_name').value,
+                        password: password
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    errorDiv.textContent = data.error || 'Registration failed';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                window.location.href = '/';
+            } catch (err) {
+                errorDiv.textContent = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.querySelector('.btn-text').textContent = 'Create Account';
+            }
+        });
+    </script>
+</body>
+
+</html>
