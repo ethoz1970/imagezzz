@@ -250,7 +250,7 @@
                             <span class="slider"></span>
                             <span class="toggle-label">Skip Brain (Direct to Model)</span>
                         </label>
-                        <label class="toggle-switch">
+                        <label class="toggle-switch" id="diversity-toggle-label" style="display: none;">
                             <input type="checkbox" id="diversity-toggle">
                             <span class="slider"></span>
                             <span class="toggle-label">Diversity Mode</span>
@@ -324,6 +324,8 @@
                 el.style.display = '';
                 el.href = '/admin?token=' + encodeURIComponent(localStorage.getItem('admin_token'));
             });
+            const dl = document.getElementById('diversity-toggle-label');
+            if (dl) dl.style.display = '';
         }
         // Auth nav
         (async () => {
